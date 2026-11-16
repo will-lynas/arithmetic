@@ -51,9 +51,26 @@ describe('StatsPage', () => {
     expect(completions).toContain('aria-label="2 × 3: 0 completions"')
     expect(completions).toContain('aria-label="1 × 1: 0 completions"')
     expect(completions).toContain('>100001</span>')
+    expect(html).toContain('Fewest 1')
+    expect(html).toContain('Most 100001')
+    expect(completions).toMatch(/data-pair="12x12"[^>]*><span[^>]*background-color:color-mix\(in srgb, var\(--stats-mid\), var\(--stats-high\) 100%\)/)
     expect(html).toMatch(/aria-label="Completions by ordered multiplication pair" style="min-width:\d+px"/)
     expect(completions).not.toContain('<button')
     expect(html.indexOf('Completions by ordered multiplication pair')).toBeGreaterThan(html.indexOf('Average solve time by ordered multiplication pair'))
+  })
+  it('colors positive lifetime completions from the observed minimum through midpoint to maximum', () => {
+    const records = [1, 3, 5].flatMap((count, pair) => Array.from({ length: count }, (_, index) => ({
+      ...attempts[2], id: `count-${pair}-${index}`, roundId: `count-${pair}-${index}`, left: pair + 1, right: 1,
+    })))
+    const html = render(records)
+    const completions = table(html, 'Completions by ordered multiplication pair')
+    const fill = (pair: string) => completions.match(new RegExp(`data-pair="${pair}"[^>]*><span[^>]*style="([^"]*)"`))?.[1]
+    expect(fill('1x1')).toBe('background-color:color-mix(in srgb, var(--stats-low), var(--stats-mid) 0%)')
+    expect(fill('2x1')).toBe('background-color:color-mix(in srgb, var(--stats-low), var(--stats-mid) 100%)')
+    expect(fill('3x1')).toBe('background-color:color-mix(in srgb, var(--stats-mid), var(--stats-high) 100%)')
+    expect(fill('4x1')).toBeUndefined()
+    expect(html).toContain('Fewest 1')
+    expect(html).toContain('Most 5')
   })
   it('adds a second ordered map using per-presentation mean solve time including corrections', () => {
     const html = render()
