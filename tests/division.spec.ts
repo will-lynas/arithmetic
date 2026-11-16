@@ -15,7 +15,7 @@ async function solution(page:Page) {
 async function entries(page:Page) {
   return page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('arithmetic:division:event:v1:')).map(k=>JSON.parse(localStorage.getItem(k)!)))
 }
-test('left mode navigation keeps multiplication Practice/Stats and division has no Stats', async ({page}) => {
+test('left mode navigation keeps independent multiplication and division Practice/Stats', async ({page}) => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/multiplication$/)
   const modes = page.getByRole('navigation',{name:'Arithmetic modes'})
@@ -27,11 +27,11 @@ test('left mode navigation keeps multiplication Practice/Stats and division has 
   await expect(page).toHaveURL(/\/multiplication\/stats$/)
   await page.getByRole('link',{name:'Division',exact:true}).click()
   await expect(division(page).getByRole('button',{name:'Start',exact:true})).toBeVisible()
-  await expect(page.getByRole('link',{name:'Stats',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('link',{name:'Stats',exact:true})).toHaveAttribute('href','/division/stats')
   await page.goBack(); await expect(page).toHaveURL(/\/multiplication\/stats$/)
   await page.goto('/stats'); await expect(page).toHaveURL(/\/multiplication\/stats$/)
-  await page.goto('/division/stats'); await expect(page).toHaveURL(/\/division$/)
-  await expect(page.getByRole('link',{name:'Stats',exact:true})).toHaveCount(0)
+  await page.goto('/division/stats'); await expect(page).toHaveURL(/\/division\/stats$/)
+  await expect(page.getByRole('table',{name:'Division statistics by divisor'})).toBeVisible()
 })
 test('both answers must be correct; mark/select only wrong fields, keyboard moves without trapping, finish five', async ({page}) => {
   await page.addInitScript(()=>{Math.random=()=>0.99999})
@@ -157,7 +157,7 @@ test('canceling an unattempted division round cannot resurrect an earlier round'
   expect((await entries(page)).filter(e=>e.kind==='cancel')).toHaveLength(2)
 })
 test('direct canonical routes and legacy popstate redirects preserve query and hash', async ({page}) => {
-  for(const path of ['/multiplication','/multiplication/stats','/division']) {
+  for(const path of ['/multiplication','/multiplication/stats','/division','/division/stats']) {
     await page.goto(path);await expect(page).toHaveURL(new RegExp(path+'$'));await page.reload();await expect(page).toHaveURL(new RegExp(path+'$'))
   }
   await page.goto('/?sample=1#saved');await expect(page).toHaveURL(/\/multiplication\?sample=1#saved$/)

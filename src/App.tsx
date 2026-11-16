@@ -7,9 +7,10 @@ import { StatsPage } from './StatsPage'
 import { groupQuestions } from './questions'
 import { acquireRound } from './ownership'
 import { DivisionPage } from './DivisionPage'
+import { DivisionStatsRoute } from './DivisionStatsPage'
 
 function resolvePath() {
-  const aliases:Record<string,string> = {'/':'/multiplication','/practice':'/multiplication','/stats':'/multiplication/stats','/division/stats':'/division'}
+  const aliases:Record<string,string> = {'/':'/multiplication','/practice':'/multiplication','/stats':'/multiplication/stats'}
   const path=aliases[location.pathname] ?? location.pathname
   if(path!==location.pathname) history.replaceState({},'',path+location.search+location.hash)
   return path
@@ -35,7 +36,7 @@ export default function App() {
   const clock = useRef(new ActiveClock(undefined, round.phase === 'playing' ? round.elapsedMs : 0))
   const [path, setPath] = useState(resolvePath)
   const practice = path === '/multiplication'
-  const multiplication = path !== '/division'
+  const multiplication = path !== '/division' && path !== '/division/stats'
   const practiceRef = useRef(practice)
   practiceRef.current = practice
   const [theme, setTheme] = useState(initialTheme)
@@ -230,7 +231,7 @@ export default function App() {
       <nav className="mode-nav" aria-label="Arithmetic modes">{[{href:'/multiplication',label:'Multiplication'},{href:'/division',label:'Division'}].map(({href,label})=><a key={href} href={href} aria-current={(href==='/division'?!multiplication:multiplication)?'page':undefined} onClick={event=>navigate(event,href)}>{label}</a>)}</nav>
     <div className="shell">
       <header className="page-header">
-        {multiplication ? <nav className="page-nav" aria-label="Main navigation">{[{href:'/multiplication',label:'Practice'}, {href:'/multiplication/stats',label:'Stats'}].map(({href,label}) => <a key={href} href={href} aria-current={(href === '/multiplication' ? practice : !practice) ? 'page' : undefined} onClick={event => navigate(event,href)}>{label}</a>)}</nav> : <span/>}
+        <nav className="page-nav" aria-label="Main navigation">{[{href:multiplication?'/multiplication':'/division',label:'Practice'}, {href:multiplication?'/multiplication/stats':'/division/stats',label:'Stats'}].map(({href,label}) => <a key={href} href={href} aria-current={path === href ? 'page' : undefined} onClick={event => navigate(event,href)}>{label}</a>)}</nav>
         <button className="theme-toggle" type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">{theme === 'dark' ? <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></> : <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/>}</svg>
         </button>
@@ -259,7 +260,8 @@ export default function App() {
         {round.phase === 'finished' && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
       </main>
       {multiplication && !practice && <main><StatsPage attempts={attempts}/></main>}
-      <DivisionPage visible={!multiplication}/>
+      <DivisionPage visible={path === '/division'}/>
+      {path === '/division/stats' && <DivisionStatsRoute/>}
     </div>
     </div>
   </div>

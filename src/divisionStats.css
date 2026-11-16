@@ -2,6 +2,7 @@
 .division-stats-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 0 0 32px; }
 .division-stats-summary dt { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .division-stats-summary dd { margin: 8px 0 0; font-size: 28px; line-height: 1.3; }
+.division-stats-summary summary { white-space: nowrap; }
 .division-stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .division-stats-table th, .division-stats-table td { padding: 12px 8px; text-align: right; border-bottom: 1px solid var(--line); font-weight: 400; }
 .division-stats-table thead th { color: var(--muted); font-size: 12px; vertical-align: bottom; }
@@ -22,4 +23,9 @@
   .division-stats-table { font-size: 12px; }
   .division-stats-table th, .division-stats-table td { padding: 12px 4px; }
   .division-stats-table thead th { font-size: 11px; }
+}
+@media (max-width: 360px) {
+  .division-stats-table { font-size: 11px; }
+  .division-stats-table thead th { font-size: 10px; }
+  .division-stats-table th, .division-stats-table td { padding-inline: 2px; }
 }
