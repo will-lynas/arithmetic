@@ -38,7 +38,7 @@
 .stats-speed-legend .stats-legend-scale[data-equal="true"] { background: var(--stats-mid); }
 .stats-speed-legend .stats-legend-scale[data-empty="true"] { background: var(--stats-empty); }
 .stats-completion-legend { flex-wrap: wrap; }
-.stats-completion-legend .stats-legend-scale { flex-shrink: 0; }
+.stats-completion-legend .stats-legend-scale { flex-shrink: 0; background: linear-gradient(to right, var(--stats-high), var(--stats-mid), var(--stats-low)); }
 .stats-completion-legend .stats-legend-empty { margin-left: 0; }
 .stats-completion-legend .stats-legend-scale[data-equal="true"] { background: var(--stats-mid); }
 .stats-completion-legend .stats-legend-scale[data-empty="true"] { background: var(--stats-empty); }
