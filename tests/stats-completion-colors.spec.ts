@@ -53,8 +53,9 @@ for (const theme of ['dark', 'light']) for (const width of [1440, 320]) {
   test(`count heatmap uses the existing palette and exact uncapped counts ${theme} ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 })
     await seed(page, theme, Array.from({ length: 144 }, (_, index) => index % 6))
+    const bytes = await page.evaluate(() => ({ ...localStorage }))
     const colors = await palette(page)
-    for (const [pair, count, token] of [['1x1', 0, 'empty'], ['1x2', 1, 'low'], ['1x4', 3, 'mid'], ['1x6', 5, 'high']] as const) {
+    for (const [pair, count, token] of [['1x1', 0, 'empty'], ['1x2', 1, 'high'], ['1x4', 3, 'mid'], ['1x6', 5, 'low']] as const) {
       await expect(cell(page, pair)).toHaveText(String(count))
       expect(await normalizedFill(page, pair)).toBe(colors[token])
     }
@@ -63,14 +64,21 @@ for (const theme of ['dark', 'light']) for (const width of [1440, 320]) {
     expect(await normalizedFill(page, '1x5')).not.toBe(colors.mid)
     expect(await normalizedFill(page, '1x5')).not.toBe(colors.high)
     await expect(legend(page)).toHaveText('Fewest 1Most 50')
-    await expect(legend(page).locator('.stats-legend-scale')).toHaveCSS('background-image', /linear-gradient/)
-    // Keep the new map contained at 320px; the pre-existing accuracy legend is wider than its column there.
-    if (width > 320) expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const gradient = await legend(page).locator('.stats-legend-scale').evaluate(e => getComputedStyle(e).backgroundImage)
+    expect(gradient).toBe(`linear-gradient(to right, ${colors.high}, ${colors.mid}, ${colors.low})`)
+    // Accuracy remains red-to-green; speed remains fast-green-to-slow-red.
+    await expect(page.getByLabel('Accuracy color scale', { exact: true }).locator('.stats-legend-scale'))
+      .toHaveCSS('background-image', `linear-gradient(to right, ${colors.low}, ${colors.mid}, ${colors.high})`)
+    await expect(page.getByLabel('Solve time color scale', { exact: true }).locator('.stats-legend-scale'))
+      .toHaveCSS('background-image', gradient)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const heading = legend(page)
     expect(await heading.evaluate(e => e.getBoundingClientRect().right <= innerWidth)).toBe(true)
     await table(page).scrollIntoViewIfNeeded()
     await page.screenshot({ path: testInfo.outputPath(`heatmap-${theme}-${width}.png`) })
     await table(page).locator('xpath=../..').screenshot({ path: testInfo.outputPath(`heatmap-map-${theme}-${width}.png`) })
+    await page.reload()
+    expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(bytes)
   })
 }
 

@@ -223,8 +223,8 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
               const count = pairs[(left - 1) * 12 + right - 1].solved
               const position = speedPosition(count || null, completions)
               const fill = position === null ? undefined : position <= 0.5
-                ? `color-mix(in srgb, var(--stats-low), var(--stats-mid) ${position * 200}%)`
-                : `color-mix(in srgb, var(--stats-mid), var(--stats-high) ${(position - 0.5) * 200}%)`
+                ? `color-mix(in srgb, var(--stats-high), var(--stats-mid) ${position * 200}%)`
+                : `color-mix(in srgb, var(--stats-mid), var(--stats-low) ${(position - 0.5) * 200}%)`
               return <td key={right} data-pair={`${left}x${right}`} aria-label={`${left} × ${right}: ${count} completion${count === 1 ? '' : 's'}`}>
                 <span className="stats-cell stats-completion" data-attempted={count > 0} style={{ backgroundColor: fill }}>{count}</span>
               </td>
