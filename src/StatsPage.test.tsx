@@ -29,6 +29,32 @@ describe('StatsPage', () => {
     expect(html).not.toContain('<h3>')
     expect(html.match(/<section class="stats-detail"><\/section>/g)).toHaveLength(2)
   })
+  it('adds a third numeric completion table below speed, counting each solved presentation once', () => {
+    const empty = table(render([]), 'Completions by ordered multiplication pair')
+    expect(empty.match(/>0<\/span>/g)).toHaveLength(144)
+    const html = render([
+      ...attempts,
+      { ...attempts[1], id: 'duplicate-success', elapsedMs: 6000 },
+      { ...attempts[2], id: 'same-round-next-index', questionIndex: 1 },
+      { ...attempts[2], id: 'reverse', left: 6, right: 9 },
+      { ...attempts[0], id: 'wrong-only', left: 2, right: 3 },
+      ...Array.from({ length: 100001 }, (_, index) => ({
+        ...attempts[2], id: `lifetime-${index}`, roundId: `older-${index}`, left: 12, right: 12, answer: 144,
+      })),
+    ])
+    const completions = table(html, 'Completions by ordered multiplication pair')
+    expect(completions.match(/data-pair=/g)).toHaveLength(144)
+    expect(completions.match(/scope="col"/g)).toHaveLength(12)
+    expect(completions.match(/scope="row"/g)).toHaveLength(12)
+    expect(completions).toContain('aria-label="9 × 6: 3 completions"')
+    expect(completions).toContain('aria-label="6 × 9: 1 completion"')
+    expect(completions).toContain('aria-label="2 × 3: 0 completions"')
+    expect(completions).toContain('aria-label="1 × 1: 0 completions"')
+    expect(completions).toContain('>100001</span>')
+    expect(html).toMatch(/aria-label="Completions by ordered multiplication pair" style="min-width:\d+px"/)
+    expect(completions).not.toContain('<button')
+    expect(html.indexOf('Completions by ordered multiplication pair')).toBeGreaterThan(html.indexOf('Average solve time by ordered multiplication pair'))
+  })
   it('adds a second ordered map using per-presentation mean solve time including corrections', () => {
     const html = render()
     const speed = table(html, 'Average solve time by ordered multiplication pair')

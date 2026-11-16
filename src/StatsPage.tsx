@@ -29,6 +29,7 @@ function speedLabel(pair: PairStatistics): string {
 export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) {
   const { pairs, summary } = useMemo(() => aggregateStatistics(attempts), [attempts])
   const scale = useMemo(() => speedScale(pairs.map(pair => pair.averageSolveMs)), [pairs])
+  const completionDigits = Math.max(...pairs.map(pair => String(pair.solved).length))
   const [selected, setSelected] = useState(() => {
     const first = Math.max(0, pairs.findIndex(pair => pair.questions > 0))
     return { accuracy: first, speed: first }
@@ -198,5 +199,24 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
     </dl>
     {heatmap('accuracy')}
     {heatmap('speed')}
+    <div className="stats-map">
+      <div className="stats-map-heading"><h2>Completions</h2></div>
+      <div className="stats-map-scroll" role="region" aria-label="Multiplication completions map" tabIndex={0}>
+        <table className="stats-heatmap" aria-label="Completions by ordered multiplication pair"
+          // Keep long lifetime counts legible by scrolling, not clipping or shrinking them.
+          style={completionDigits > 5 ? { minWidth: `${(completionDigits * 8 + 8) * 12 + 84}px` } : undefined}>
+          <thead><tr><td aria-hidden="true">×</td>{factors.map(right => <th scope="col" key={right}>{right}</th>)}</tr></thead>
+          <tbody>{factors.map(left => <tr key={left}>
+            <th scope="row">{left}</th>
+            {factors.map(right => {
+              const count = pairs[(left - 1) * 12 + right - 1].solved
+              return <td key={right} data-pair={`${left}x${right}`} aria-label={`${left} × ${right}: ${count} completion${count === 1 ? '' : 's'}`}>
+                <span className="stats-cell stats-completion" data-attempted={count > 0}>{count}</span>
+              </td>
+            })}
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </div>
   </section>
 }

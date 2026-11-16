@@ -45,6 +45,8 @@
 .stats-cell[data-compact="true"] { font-size: 10px; line-height: 1.2; }
 .stats-cell[data-attempted="false"] { color: var(--stats-muted); }
 .stats-cell:hover { border-color: var(--stats-muted); }
+.stats-completion { display: flex; align-items: center; justify-content: center; cursor: default; white-space: nowrap; }
+.stats-completion:hover { border-color: transparent; }
 .stats-cell:focus-visible { outline: 2px solid var(--stats-focus); outline-offset: 1px; position: relative; z-index: 1; }
 .stats-detail { display: flex; align-items: baseline; gap: 24px; min-height: 80px; padding-top: 22px; margin-top: 22px; border-top: 1px solid var(--stats-line); }
 .stats-detail h3 { margin: 0; min-width: 80px; color: var(--stats-text); font-size: 18px; font-weight: 400; }
