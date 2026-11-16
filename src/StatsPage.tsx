@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { AttemptRecord } from './types'
 import { aggregateStatistics } from './statistics'
@@ -19,8 +19,30 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
   const { pairs, summary } = useMemo(() => aggregateStatistics(attempts), [attempts])
   const [selected, setSelected] = useState(() => Math.max(0, pairs.findIndex(pair => pair.questions > 0)))
   const [hovered, setHovered] = useState<number | null>(null)
+  const [keyboardFocused, setKeyboardFocused] = useState<number | null>(null)
+  const keyboard = useRef(true)
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
-  const detail = pairs[hovered ?? selected]
+  const active = hovered ?? keyboardFocused
+  const detail = active === null ? null : pairs[active]
+
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.metaKey || event.altKey || event.isComposing || ['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return
+      keyboard.current = true
+      const index = buttons.current.indexOf(document.activeElement as HTMLButtonElement)
+      if (index !== -1) { setHovered(null); setKeyboardFocused(index) }
+    }
+    const onPointer = () => { keyboard.current = false; setKeyboardFocused(null) }
+    const onBlur = () => { setHovered(null); setKeyboardFocused(null) }
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('pointerdown', onPointer, true)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('pointerdown', onPointer, true)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
 
   function navigate(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const row = Math.floor(index / 12)
@@ -54,7 +76,7 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
       </div>
     </div>
     <div className="stats-map-scroll" role="region" aria-label="Multiplication accuracy map" tabIndex={0}>
-    <table className="stats-heatmap" aria-label="First-try accuracy by ordered multiplication pair" onMouseLeave={() => setHovered(null)}>
+    <table className="stats-heatmap" aria-label="First-try accuracy by ordered multiplication pair">
       <thead><tr><td aria-hidden="true">×</td>{factors.map(right => <th scope="col" key={right}>{right}</th>)}</tr></thead>
       <tbody>{factors.map(left => <tr key={left}>
         <th scope="row">{left}</th>
@@ -70,8 +92,12 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
               data-attempted={pair.questions > 0} aria-label={cellLabel(pair)} title={cellLabel(pair)}
               tabIndex={selected === index ? 0 : -1} style={{ backgroundColor: fill } as CSSProperties}
               ref={element => { buttons.current[index] = element }}
-              onFocus={() => { setSelected(index); setHovered(null) }}
-              onMouseEnter={() => setHovered(index)} onKeyDown={event => navigate(event, index)}>
+              onFocus={() => { setSelected(index); if (keyboard.current) setKeyboardFocused(index) }}
+              onBlur={() => setKeyboardFocused(null)}
+              onPointerEnter={() => setHovered(index)} onPointerLeave={() => setHovered(null)}
+              onPointerCancel={() => setHovered(null)}
+              onPointerUp={event => { if (event.pointerType === 'touch') setHovered(null) }}
+              onKeyDown={event => navigate(event, index)}>
               {percent(accuracy)}
             </button>
           </td>
@@ -79,7 +105,8 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
       </tr>)}</tbody>
     </table>
     </div>
-    <section className="stats-detail" aria-label={`${detail.left} × ${detail.right} details`}>
+    <section className="stats-detail" aria-label={detail ? `${detail.left} × ${detail.right} details` : undefined}>
+      {detail && <>
       <h3>{detail.left} × {detail.right}</h3>
       <dl>
         <div><dt>Questions attempted</dt><dd>{detail.questions}</dd></div>
@@ -88,6 +115,7 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
         <div><dt>Avg first answer</dt><dd>{duration(detail.averageFirstAnswerMs)}</dd></div>
         <div><dt>Avg solve</dt><dd>{duration(detail.averageSolveMs)}<span> ({detail.solved} solved)</span></dd></div>
       </dl>
+      </>}
     </section>
   </section>
 }

@@ -21,5 +21,8 @@ describe('StatsPage', () => {
     expect(html).toContain('Unattempted')
     expect(html).toContain('0%')
     expect(html).toContain('100%')
+    expect(html).not.toContain(' details"')
+    expect(html).not.toContain('<h3>')
+    expect(html).toContain('<section class="stats-detail"></section>')
   })
 })
