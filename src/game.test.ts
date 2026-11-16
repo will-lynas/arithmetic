@@ -18,6 +18,11 @@ test('only explicit safe integers are submissions', () => {
   for (const text of ['', ' ', '1.0', '2e2', '1.2', 'NaN', '9007199254740993']) expect(parseAnswer(text)).toBeNull()
   expect(parseAnswer(' 144 ')).toBe(144); expect(parseAnswer('-1')).toBe(-1)
 })
+test('legacy mixed-pair rounds are not resumed as a fabricated shared question', () => {
+  const a = {version:1 as const,id:'a',roundId:'legacy-round',questionIndex:0,left:2,right:3,answer:0,correct:false,elapsedMs:1000,submittedAt:'2026-01-01T00:00:00.000Z'}
+  const b = {...a,id:'b',left:4,right:5,answer:20,correct:true,elapsedMs:2000}
+  expect(restoreRound([a,b])).toEqual({phase:'ready'})
+})
 test('empty event history restores ready without starting a clock', () => {
   expect(restoreRound([])).toEqual({phase: 'ready'})
 })

@@ -55,6 +55,14 @@ describe('aggregateStatistics', () => {
     expect(stats.pairs.find(pair => pair.left === 6 && pair.right === 9)).toMatchObject({ questions: 1, accuracy: 100, errors: 0 })
     expect(stats.summary).toEqual({ questions: 3, firstTryCorrect: 2, accuracy: 200 / 3, errors: 2, completedRounds: 0 })
   })
+  it('keeps legacy divergent pairs at the same round index separate', () => {
+    const stats = aggregateStatistics([attempt({left:2,right:3,answer:0}), attempt({id:'other-tab',left:4,right:5,answer:20,correct:true,elapsedMs:2000})])
+    expect(stats.summary.questions).toBe(2)
+    const remaining = Array.from({length:9}, (_,i) => attempt({id:`rest-${i}`,questionIndex:i+1,correct:true}))
+    expect(aggregateStatistics([...remaining,attempt({left:2,right:3}),attempt({id:'conflict',left:4,right:5,correct:true})]).summary.completedRounds).toBe(0)
+    expect(stats.pairs.find(p => p.left === 2 && p.right === 3)).toMatchObject({questions:1, solved:0, errors:1})
+    expect(stats.pairs.find(p => p.left === 4 && p.right === 5)).toMatchObject({questions:1, solved:1, errors:0})
+  })
   it('includes every ordered pair with null accuracy for unattempted questions', () => {
     const stats = aggregateStatistics([])
     expect(stats.pairs).toHaveLength(144)

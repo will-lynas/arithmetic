@@ -3,6 +3,8 @@ import { ActiveClock, parseAnswer, randomQuestion, restoreRound, type Round } fr
 import { appendAttempt, loadAttempts, loadStorageWarnings } from './storage'
 import type { AttemptRecord } from './types'
 import { StatsPage } from './StatsPage'
+import { groupQuestions } from './questions'
+import { acquireRound } from './ownership'
 
 function initialTheme() {
   try { return localStorage.getItem('arithmetic:theme') === 'light' ? 'light' : 'dark' }
@@ -10,7 +12,11 @@ function initialTheme() {
 }
 export default function App() {
   const [attempts, setAttempts] = useState(loadAttempts)
-  const [round, setRound] = useState<Round>(() => restoreRound(attempts))
+  const [round, setRound] = useState<Round>({phase:'ready'})
+  const owner = useRef<(() => void) | null>(null)
+  const claiming = useRef(true)
+  const generation = useRef(0)
+  const [available, setAvailable] = useState(false)
   const roundRef = useRef(round)
   const clock = useRef(new ActiveClock(undefined, round.phase === 'playing' ? round.elapsedMs : 0))
   const [path, setPath] = useState(location.pathname)
@@ -28,16 +34,67 @@ export default function App() {
   const pending = useRef<AttemptRecord | null>(null)
   const [savingFailed, setSavingFailed] = useState(false)
   const armed = useRef(true)
-  const active = () => practiceRef.current && document.visibilityState === 'visible' && document.hasFocus() && roundRef.current.phase === 'playing' && !pending.current
+  const active = () => practiceRef.current && document.visibilityState === 'visible' && document.hasFocus() && roundRef.current.phase === 'playing' && !pending.current && !!owner.current
   const syncClock = () => clock.current.setActive(active())
   function transition(next: Round) { roundRef.current = next; setRound(next) }
   function clearAnswer() { answerRef.current = ''; setAnswer(''); armed.current = true; setFeedback('') }
-  function start() {
-    if (!practiceRef.current || roundRef.current.phase === 'playing' || pending.current) return
-    transition({phase: 'playing', roundId: crypto.randomUUID(), questionIndex: 0, ...randomQuestion(), elapsedMs: 0})
-    clock.current = new ActiveClock(); clearAnswer(); syncClock()
+  async function claim(candidate: Round, restoring = false) {
+    const token = ++generation.current
+    claiming.current = true; setAvailable(false)
+    try {
+      const release = candidate.phase === 'playing' ? await acquireRound(candidate.roundId) : null
+      if (token !== generation.current) { release?.(); return }
+      if (candidate.phase === 'playing' && !release) {
+        transition({phase:'ready'})
+        return
+      }
+      owner.current = release
+      // Refresh inside ownership: another owner may have finished before release.
+      const next = restoring && candidate.phase !== 'ready'
+        ? restoreRound(loadAttempts().filter(a => a.roundId === candidate.roundId)) : candidate
+      transition(next)
+      if (next.phase !== 'ready') {
+        // Per-tab reload hint only; attempts remain the immutable authority.
+        try {
+          const previous = sessionStorage.getItem('arithmetic:round:v1')
+          if (previous === null || /^[0-9a-f-]{36}$/i.test(previous)) sessionStorage.setItem('arithmetic:round:v1', next.roundId)
+        } catch { /* Optional hint; ownership and event durability do not depend on it. */ }
+      }
+      if (next.phase !== 'playing') { owner.current?.(); owner.current = null }
+      clock.current = new ActiveClock(undefined, next.phase === 'playing' ? next.elapsedMs : 0)
+      clearAnswer(); syncClock()
+    } catch {
+      setError('Safe round ownership is unavailable. Use a browser with Web Locks before answering. Existing data has been kept.')
+    } finally {
+      if (token === generation.current) { claiming.current = false; setAvailable(true) }
+    }
   }
+  function start() {
+    if (!practiceRef.current || claiming.current || roundRef.current.phase === 'playing' || pending.current) return
+    void claim({phase:'playing', roundId:crypto.randomUUID(), questionIndex:0, ...randomQuestion(), elapsedMs:0})
+  }
+  useEffect(() => {
+    const saved = loadAttempts()
+    let preferred = saved
+    try {
+      const roundId = sessionStorage.getItem('arithmetic:round:v1')
+      const matching = saved.filter(a => a.roundId === roundId)
+      if (matching.length) preferred = matching
+    } catch { /* Fall back to the existing ledger, never overwrite it. */ }
+    void claim(restoreRound(preferred), true)
+    const release = () => {
+      generation.current++; claiming.current = true
+      clock.current.setActive(false); owner.current?.(); owner.current = null
+    }
+    const resume = (event: PageTransitionEvent) => { if (event.persisted) location.reload() }
+    window.addEventListener('pagehide', release)
+    window.addEventListener('pageshow', resume)
+    return () => {
+      release(); window.removeEventListener('pagehide', release); window.removeEventListener('pageshow', resume)
+    }
+  }, [])
   function commit(record: AttemptRecord) {
+    if (!owner.current) return
     try { appendAttempt(record) }
     catch {
       pending.current = record; setSavingFailed(true); clock.current.setActive(false)
@@ -54,7 +111,9 @@ export default function App() {
       return
     }
     clock.current.setActive(false)
-    if (current.questionIndex === 9) transition({phase:'finished', roundId: current.roundId})
+    if (current.questionIndex === 9) {
+      transition({phase:'finished', roundId:current.roundId}); owner.current?.(); owner.current = null
+    }
     else {
       transition({...current, questionIndex: current.questionIndex + 1, ...randomQuestion(), elapsedMs: 0})
       clock.current = new ActiveClock(); syncClock()
@@ -63,7 +122,7 @@ export default function App() {
   }
   function submit() {
     const current = roundRef.current
-    if (current.phase !== 'playing' || pending.current || !armed.current) return
+    if (current.phase !== 'playing' || !owner.current || claiming.current || pending.current || !armed.current) return
     const value = parseAnswer(answerRef.current)
     if (value === null) { setFeedback('Enter a whole number'); input.current?.select(); return }
     armed.current = false
@@ -119,13 +178,9 @@ export default function App() {
     } catch { setError('Theme could not be saved. Existing browser data has been kept.') }
   }
   const roundAttempts = round.phase === 'ready' ? [] : attempts.filter(a => a.roundId === round.roundId)
-  const first = new Map<number, AttemptRecord>()
-  const elapsed = new Map<number, number>()
-  for (const record of roundAttempts) {
-    if (!first.has(record.questionIndex)) first.set(record.questionIndex, record)
-    elapsed.set(record.questionIndex, Math.max(elapsed.get(record.questionIndex) ?? 0, record.elapsedMs))
-  }
-  const seconds = [...elapsed.values()].reduce((sum, value) => sum + value, 0) / 1000
+  const questions = groupQuestions(roundAttempts)
+  const firstTry = questions.filter(submissions => submissions[0].correct).length
+  const seconds = questions.reduce((sum, submissions) => sum + Math.max(...submissions.map(a => a.elapsedMs)), 0) / 1000
   return <div className={`app ${theme}`}>
     <div className="shell">
       <header className="page-header">
@@ -138,7 +193,7 @@ export default function App() {
       {warnings.map(warning => <p className="storage-warning" role="alert" key={warning}>{warning}</p>)}
       {error && <div className="storage-warning" role="alert">{error}{savingFailed && <button className="retry-save" onClick={() => { if (pending.current) commit(pending.current) }}>Retry saving</button>}</div>}
       <main className="practice-page" hidden={!practice}>
-        {round.phase === 'ready' && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
+        {round.phase === 'ready' && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available} onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
         {round.phase === 'playing' && <section className="stage" aria-label="Multiplication practice">
           <p className="progress" aria-label="Question progress">{round.questionIndex + 1} / 10</p>
           <div className="equation" data-invalid={!!feedback}>
@@ -148,7 +203,7 @@ export default function App() {
           <p id="answer-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
           <p className="shortcut"><kbd>enter</kbd> submit</p>
         </section>}
-        {round.phase === 'finished' && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{[...first.values()].filter(a => a.correct).length}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+        {round.phase === 'finished' && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
       </main>
       {!practice && <main><StatsPage attempts={attempts}/></main>}
     </div>

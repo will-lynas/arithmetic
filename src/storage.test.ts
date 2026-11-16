@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { appendAttempt, loadAttempts, loadStorageWarnings } from './storage'
+import { aggregateStatistics } from './statistics'
 const memory = new Map<string, string>()
 const storage = { get length() { return memory.size }, key: (i: number) => [...memory.keys()][i] ?? null, getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value) } }
 beforeEach(() => { memory.clear(); Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true }) })
@@ -20,6 +21,17 @@ test('corrupt attempts and unsupported preferences remain untouched and warn', (
   expect(loadAttempts()).toEqual([])
   expect(loadStorageWarnings().some(w => w.includes('theme'))).toBe(true)
   expect([...memory.entries()]).toEqual(before)
+})
+test('ambiguous equal-time corrections never manufacture first-try success or rewrite legacy bytes', () => {
+  const wrong = {...record, id:'f26a9d79-6343-457b-8b54-28aa2e85a912', extra:{retained:true}}
+  const correct = {...record, answer:84, correct:true}
+  appendAttempt(wrong); appendAttempt(correct)
+  const before = [...memory.entries()]
+  for (const records of [loadAttempts(), loadAttempts().reverse()]) {
+    expect(aggregateStatistics(records).summary).toMatchObject({questions:1, firstTryCorrect:0, accuracy:0, errors:1})
+  }
+  expect([...memory.entries()]).toEqual(before)
+  expect(loadAttempts().find(a => a.id === wrong.id)).toEqual(wrong)
 })
 test('silent failed write is rejected by readback', () => {
   Object.defineProperty(globalThis, 'localStorage', {value:{...storage, setItem:()=>{}}, configurable:true})

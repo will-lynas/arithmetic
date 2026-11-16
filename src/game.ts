@@ -1,4 +1,5 @@
 import type { AttemptRecord } from './types'
+import { groupQuestions } from './questions'
 export class ActiveClock {
   private accumulated: number
   private since: number | null = null
@@ -20,6 +21,10 @@ export function restoreRound(attempts: AttemptRecord[]): Round {
   const last = attempts.at(-1)
   if (!last) return { phase: 'ready' }
   const round = attempts.filter(a => a.roundId === last.roundId)
+  const questions = groupQuestions(round)
+  // Old concurrent tabs may have assigned two pairs to one slot. Keep their
+  // events for Stats, but do not invent a resumable shared round.
+  if (questions.length !== new Set(questions.map(q => q[0].questionIndex)).size) return {phase:'ready'}
   const index = Math.max(...round.map(a => a.questionIndex))
   const question = round.filter(a => a.questionIndex === index)
   const latest = question.at(-1)!

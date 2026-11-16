@@ -1,4 +1,5 @@
 import type { AttemptRecord } from './types'
+import { groupQuestions } from './questions'
 
 export interface PairStatistics {
   left: number
@@ -32,22 +33,18 @@ export function aggregateStatistics(attempts: readonly AttemptRecord[]): Statist
     })),
     summary: { questions: 0, firstTryCorrect: 0, accuracy: null, errors: 0, completedRounds: 0 },
   }
-  const questions = new Map<string, AttemptRecord[]>()
-  const seen = new Set<string>()
-  for (const attempt of attempts) {
-    if (seen.has(attempt.id)) continue
-    seen.add(attempt.id)
-    const key = JSON.stringify([attempt.roundId, attempt.questionIndex])
-    const submissions = questions.get(key) ?? []
-    submissions.push(attempt)
-    questions.set(key, submissions)
-  }
+  const questions = groupQuestions(attempts)
   const solvedRounds = new Map<string, Set<number>>()
+  const slots = new Set<string>()
+  const ambiguousRounds = new Set<string>()
+  for (const [first] of questions) {
+    const slot = JSON.stringify([first.roundId, first.questionIndex])
+    if (slots.has(slot)) ambiguousRounds.add(first.roundId)
+    slots.add(slot)
+  }
   const firstTimes = new Map<PairStatistics, number>()
   const solveTimes = new Map<PairStatistics, number>()
-  for (const submissions of questions.values()) {
-    // elapsedMs is cumulative active question time, including correction attempts.
-    submissions.sort((a, b) => a.elapsedMs - b.elapsedMs || a.submittedAt.localeCompare(b.submittedAt))
+  for (const submissions of questions) {
     const first = submissions[0]
     const pair = stats.pairs[(first.left - 1) * 12 + first.right - 1]
     pair.questions++
@@ -71,8 +68,8 @@ export function aggregateStatistics(attempts: readonly AttemptRecord[]): Statist
     stats.summary.firstTryCorrect += pair.firstTryCorrect
     stats.summary.errors += pair.errors
   }
-  stats.summary.completedRounds = [...solvedRounds.values()].filter(indices =>
-    Array.from({ length: 10 }, (_, index) => index).every(index => indices.has(index)),
+  stats.summary.completedRounds = [...solvedRounds.entries()].filter(([roundId, indices]) =>
+    !ambiguousRounds.has(roundId) && Array.from({ length: 10 }, (_, index) => index).every(index => indices.has(index)),
   ).length
   stats.summary.accuracy = stats.summary.questions
     ? 100 * stats.summary.firstTryCorrect / stats.summary.questions : null
