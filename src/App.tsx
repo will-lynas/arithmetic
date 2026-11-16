@@ -49,6 +49,8 @@ export default function App() {
   const [warnings, setWarnings] = useState(loadStorageWarnings)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [invalidInput, setInvalidInput] = useState(false)
+  const [refusal, setRefusal] = useState(0)
   const [answer, setAnswer] = useState('')
   const answerRef = useRef('')
   const input = useRef<HTMLInputElement>(null)
@@ -59,7 +61,7 @@ export default function App() {
   const active = () => practiceRef.current && document.visibilityState === 'visible' && document.hasFocus() && roundRef.current.phase === 'playing' && !pending.current && !!owner.current
   const syncClock = () => clock.current.setActive(active())
   function transition(next: Round) { roundRef.current = next; setRound(next) }
-  function clearAnswer() { answerRef.current = ''; setAnswer(''); armed.current = true; setFeedback('') }
+  function clearAnswer() { answerRef.current = ''; setAnswer(''); armed.current = true; setFeedback(''); setInvalidInput(false); setRefusal(0) }
   async function claim(candidate: Round, restoring = false) {
     const token = ++generation.current
     claiming.current = true; setAvailable(false)
@@ -136,6 +138,7 @@ export default function App() {
     const current = roundRef.current
     if (current.phase !== 'playing') return
     if (!record.correct) {
+      setInvalidInput(false); setRefusal(0)
       setFeedback('Incorrect — try again')
       input.current?.focus(); input.current?.select(); syncClock()
       return
@@ -165,7 +168,7 @@ export default function App() {
     const current = roundRef.current
     if (current.phase !== 'playing' || !owner.current || claiming.current || pending.current || !armed.current) return
     const value = parseAnswer(answerRef.current)
-    if (value === null) { setFeedback('Enter a whole number'); input.current?.select(); return }
+    if (value === null) { setInvalidInput(true); setRefusal(n => n + 1); setFeedback('Enter a whole number'); input.current?.focus(); input.current?.select(); return }
     armed.current = false
     const record: AttemptRecord = {version:1, id:crypto.randomUUID(), roundId:current.roundId, questionIndex:current.questionIndex, left:current.left, right:current.right, answer:value, correct:value === current.left * current.right, elapsedMs:clock.current.elapsed(), submittedAt:new Date().toISOString()}
     pending.current = record
@@ -256,11 +259,11 @@ export default function App() {
         {round.phase === 'ready' && !preparing && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available} onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
         {(round.phase === 'playing' || preparing) && <section className="stage" aria-label="Multiplication practice" aria-busy={preparing}>
           <p className="progress" aria-label="Question progress">{round.phase === 'playing' ? `${round.questionIndex + 1} / 10` : 'Starting…'}</p>
-          <div className="equation" data-invalid={!!feedback}>
+          <div className="equation" data-invalid={!!feedback && !invalidInput} data-refusal={refusal ? (refusal % 2 ? 'a' : 'b') : undefined} onAnimationEnd={event => { if (event.target === event.currentTarget) setRefusal(0) }}>
             <span className="question" data-testid={round.phase === 'playing' ? 'question' : undefined} aria-label={round.phase === 'playing' ? `${round.left} times ${round.right}` : undefined}>{round.phase === 'playing' ? <>{round.left} <span className="operator">×</span> {round.right}</> : '…'}</span><span className="operator equals" aria-hidden="true">=</span>
-            <input ref={input} aria-label={preparing ? 'Starting round' : 'Answer'} aria-invalid={!!feedback} aria-describedby="answer-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={answer} aria-disabled={preparing} disabled={savingFailed} onBeforeInput={event => { if (claiming.current) event.preventDefault() }} onChange={event => { if (claiming.current || !owner.current) return; answerRef.current = event.target.value; setAnswer(event.target.value); armed.current = true; setFeedback('') }}/>
+            <input ref={input} aria-label={preparing ? 'Starting round' : 'Answer'} aria-invalid={!!feedback} data-wrong={!!feedback && !invalidInput} data-malformed={invalidInput} aria-describedby="answer-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={answer} aria-disabled={preparing} disabled={savingFailed} onBeforeInput={event => { if (claiming.current) event.preventDefault() }} onChange={event => { if (claiming.current || !owner.current) return; answerRef.current = event.target.value; setAnswer(event.target.value); armed.current = true; setFeedback(''); setInvalidInput(false); setRefusal(0) }}/>
           </div>
-          <p id="answer-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
+          <p id="answer-feedback" className="answer-feedback" data-validation={invalidInput} role="status">{feedback || ' '}</p>
           <div className="practice-actions">
             <button className="submit-answer" type="button" disabled={!available || savingFailed} onPointerDown={event => { event.preventDefault(); input.current?.focus() }} onClick={submit}>Submit</button>
             <button className="cancel-round" type="button" disabled={!available || savingFailed} onClick={cancel}>Cancel</button>
