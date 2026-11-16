@@ -33,7 +33,7 @@ async function verifyLedger(page:Page,history:AttemptRecord[]) {
     await plot.getByText('Bin counts',{exact:true}).click()
   }
 }
-for(const theme of ['dark','light'])for(const width of [1440,375])test(`real hidden load refreshes Debug, reloads and exactly restores original ${theme} ${width}`,async({page},info)=>{
+for(const theme of ['dark','light'])for(const width of [1440,320])test(`real hidden load refreshes Debug, reloads and exactly restores original ${theme} ${width}`,async({page},info)=>{
   await page.setViewportSize({width,height:1000})
   await page.clock.setFixedTime(new Date(now))
   await page.goto('/multiplication/debug?demo=1')
@@ -53,7 +53,8 @@ for(const theme of ['dark','light'])for(const width of [1440,375])test(`real hid
   await page.getByRole('button',{name:'Cancel',exact:true}).click()
   const loaded=await bytes(page),backup=loaded['arithmetic:synthetic:backup:v1']
   const history=Object.entries(loaded).filter(([k])=>k.startsWith('arithmetic:attempt:v1:')).map(([,v])=>JSON.parse(v) as AttemptRecord)
-  expect(history.length).toBeGreaterThan(300)
+  expect(history.filter(a=>a.correct).length).toBeGreaterThanOrEqual(2000)
+  expect(samplerDiagnostics(history,now).rows.every(row=>row.coverageBoost===0)).toBe(true)
   await verifyLedger(page,history)
   expect(loaded['arithmetic:theme']).toBe(theme);expect(loaded['unrelated:site']).toBe(original['unrelated:site']);expect(loaded['arithmetic:future-setting']).toBe(original['arithmetic:future-setting'])
   await expect(page.locator('.app').first()).toHaveClass(new RegExp(theme))
