@@ -12,6 +12,8 @@ export function DivisionPage({visible}:{visible:boolean}) {
   const [values,setValues] = useState(['',''])
   const valuesRef = useRef(values)
   const [wrong,setWrong] = useState([false,false])
+  const [invalidInput,setInvalidInput] = useState([false,false])
+  const [refusal,setRefusal] = useState(0)
   const [feedback,setFeedback] = useState('')
   const [error,setError] = useState('')
   const [warnings,setWarnings] = useState<string[]>([])
@@ -30,7 +32,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
   const clock = useRef(new ActiveClock())
   function syncClock() {clock.current.setActive(visibleRef.current && document.visibilityState==='visible' && document.hasFocus() && !!current.current && !current.current.finished && !!owner.current && !pending.current)}
   function transition(next:Round|null) {current.current=next;setRound(next)}
-  function clear() {valuesRef.current=['',''];setValues(['','']);setWrong([false,false]);setFeedback('');armed.current=true}
+  function clear() {valuesRef.current=['',''];setValues(['','']);setWrong([false,false]);setInvalidInput([false,false]);setRefusal(0);setFeedback('');armed.current=true}
   function refresh() {const data=loadDivisionEvents();setWarnings(data.warnings);setAttempts(data.events.filter((e):e is DivisionAttempt=>e.kind==='attempt'));return data}
   function hint(roundId:string) {
     try {
@@ -52,7 +54,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
       if(!state) return
       if(!event.correct) {
         const invalid=[event.answerQuotient!==event.quotient,event.answerRemainder!==event.remainder]
-        setWrong(invalid);setFeedback('Incorrect — try again')
+        setWrong(invalid);setInvalidInput([false,false]);setRefusal(0);setFeedback('Incorrect — try again')
         const input=inputs[invalid[0]?0:1].current;input?.focus();input?.select()
       } else {
         clock.current.setActive(false)
@@ -93,7 +95,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
     if(!visibleRef.current || !state || state.finished || !owner.current || claiming.current || pending.current || !armed.current) return
     const a=valuesRef.current.map(parseAnswer)
     if(a[0]===null || a[1]===null) {
-      const invalid=a.map(v=>v===null);setWrong(invalid);setFeedback('Enter two whole numbers')
+      const invalid=a.map(v=>v===null);setWrong([false,false]);setInvalidInput(invalid);setRefusal(n=>n+1);setFeedback('Enter two whole numbers')
       const input=inputs[invalid[0]?0:1].current;input?.focus();input?.select();return
     }
     armed.current=false
@@ -167,11 +169,11 @@ export function DivisionPage({visible}:{visible:boolean}) {
     {!round && !preparing && <section className="ready stage" aria-label="Ready"><p className="progress">{DIVISION_ROUND_LENGTH} questions</p><button ref={action} className="primary" disabled={!available || failed} onClick={()=>void start()}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
     {(question || preparing) && <section className="stage" aria-label="Division practice" aria-busy={preparing}>
       <p className="progress" aria-label="Question progress">{preparing?'Starting…':`${round!.index+1} / ${plannedLength}`}</p>
-      <div className="equation division-equation" data-invalid={wrong.some(Boolean)}>
+      <div className="equation division-equation" data-invalid={wrong.some(Boolean)} data-refusal={refusal?(refusal%2?'a':'b'):undefined} onAnimationEnd={event=>{if(event.target===event.currentTarget)setRefusal(0)}}>
         <span className="question" data-testid={question?'division-question':undefined} aria-label={question?`${question.dividend} divided by ${question.divisor}`:undefined}>{question?<>{question.dividend} <span className="operator">÷</span> {question.divisor}</>:'…'}</span><span className="operator equals" aria-hidden="true">=</span>
-        <div className="division-answers">{['Quotient','Remainder'].map((label,index)=><label className="division-field" key={label}><input ref={inputs[index]} aria-label={preparing?`Starting ${label.toLowerCase()}`:label} aria-invalid={wrong[index]} aria-describedby="division-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={values[index]} aria-disabled={preparing} disabled={failed} onBeforeInput={e=>{if(claiming.current)e.preventDefault()}} onChange={e=>{if(claiming.current || !owner.current)return;const next=[...valuesRef.current];next[index]=e.target.value;valuesRef.current=next;setValues(next);setWrong([false,false]);setFeedback('');armed.current=true}}/><span>{label.toLowerCase()}</span></label>)}</div>
+        <div className="division-answers">{['Quotient','Remainder'].map((label,index)=><label className="division-field" key={label}><input ref={inputs[index]} aria-label={preparing?`Starting ${label.toLowerCase()}`:label} aria-invalid={wrong[index] || invalidInput[index]} data-wrong={wrong[index]} data-malformed={invalidInput[index]} aria-describedby="division-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={values[index]} aria-disabled={preparing} disabled={failed} onBeforeInput={e=>{if(claiming.current)e.preventDefault()}} onChange={e=>{if(claiming.current || !owner.current)return;const next=[...valuesRef.current];next[index]=e.target.value;valuesRef.current=next;setValues(next);setWrong([false,false]);setInvalidInput([false,false]);setRefusal(0);setFeedback('');armed.current=true}}/><span>{label.toLowerCase()}</span></label>)}</div>
       </div>
-      <p id="division-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
+      <p id="division-feedback" className="answer-feedback" data-validation={invalidInput.some(Boolean)} role="status">{feedback || ' '}</p>
       <div className="practice-actions">
         <button className="submit-answer" type="button" disabled={preparing || failed} onPointerDown={e=>e.preventDefault()} onClick={submit}>Submit</button>
         <button className="cancel-round" type="button" disabled={preparing || failed} onPointerDown={e=>e.preventDefault()} onClick={cancel}>Cancel</button>
