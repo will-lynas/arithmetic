@@ -3,15 +3,15 @@ import type { AttemptRecord } from '../src/types'
 const roundId = '30e91bd6-fb88-4645-8c76-22b03751f8b0'
 function fixture(overrides: Partial<AttemptRecord> = {}): AttemptRecord { return {version:1,id:crypto.randomUUID(),roundId,questionIndex:0,left:9,right:6,answer:53,correct:false,elapsedMs:1000,submittedAt:'2026-01-01T00:00:00.000Z',...overrides} }
 async function seed(page: Page, attempts: AttemptRecord[]) { await page.evaluate(attempts => { for(const a of attempts) localStorage.setItem('arithmetic:attempt:v1:'+a.id,JSON.stringify(a)) },attempts) }
-const cell = (page: Page, pair: string) => page.locator(`[data-pair="${pair}"]`)
+const cell = (page: Page, pair: string) => page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator(`[data-pair="${pair}"]`)
 test('direct stats load, reload, client navigation and browser history resolve correctly', async ({page}) => {
   await page.goto('/stats')
   await expect(page.getByRole('region',{name:'Statistics',exact:true})).toBeVisible()
   await expect(page.getByRole('link',{name:'Stats',exact:true})).toHaveAttribute('aria-current','page')
-  await expect(page.locator('.stats-cell')).toHaveCount(144)
+  await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('.stats-cell')).toHaveCount(144)
   await expect(cell(page,'9x6')).toHaveAccessibleName('9 × 6: unattempted (0 questions)')
   await expect(page.getByRole('button',{name:'Start',exact:true})).toBeHidden()
-  await page.reload(); await expect(page.locator('.stats-cell')).toHaveCount(144)
+  await page.reload(); await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('.stats-cell')).toHaveCount(144)
   await page.getByRole('link',{name:'Practice',exact:true}).click()
   await expect(page).toHaveURL(/\/$/); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
   await page.goBack(); await expect(page.getByRole('region',{name:'Statistics',exact:true})).toBeVisible()

@@ -6,23 +6,49 @@ import type { AttemptRecord } from './types'
 
 const attempts: AttemptRecord[] = [
   { version: 1, id: 'wrong', roundId: 'sample', questionIndex: 0, left: 9, right: 6, answer: 53, correct: false, elapsedMs: 1000, submittedAt: '2026-01-01T00:00:00.000Z' },
-  { version: 1, id: 'correct', roundId: 'sample', questionIndex: 0, left: 9, right: 6, answer: 54, correct: true, elapsedMs: 3000, submittedAt: '2026-01-01T00:00:02.000Z' },
+  { version: 1, id: 'correct', roundId: 'sample', questionIndex: 0, left: 9, right: 6, answer: 54, correct: true, elapsedMs: 5000, submittedAt: '2026-01-01T00:00:02.000Z' },
+  { version: 1, id: 'clean', roundId: 'independent', questionIndex: 0, left: 9, right: 6, answer: 54, correct: true, elapsedMs: 3000, submittedAt: '2026-01-01T00:00:03.000Z' },
 ]
+const render = (records = attempts) => renderToStaticMarkup(createElement(StatsPage, { attempts: records }))
+const table = (html: string, name: string) => html.match(new RegExp(`<table[^>]*aria-label="${name}"[^>]*>([\\s\\S]*?)</table>`))?.[1] ?? ''
 
 describe('StatsPage', () => {
-  it('renders 144 accessible ordered cells with both factor axes and first-try denominators', () => {
-    const html = renderToStaticMarkup(createElement(StatsPage, { attempts }))
-    expect(html.match(/data-pair=/g)).toHaveLength(144)
-    expect(html.match(/scope="col"/g)).toHaveLength(12)
-    expect(html.match(/scope="row"/g)).toHaveLength(12)
-    expect(html).toContain('aria-label="9 × 6: 0% first-try correct (0 of 1 questions); 1 wrong submission; average first answer 1.00 s; average solve 3.00 s (1 solved)"')
-    expect(html).toContain('aria-label="6 × 9: unattempted (0 questions)"')
+  it('preserves 144 accessible accuracy cells, axes, denominators and initially empty details', () => {
+    const html = render()
+    const accuracy = table(html, 'First-try accuracy by ordered multiplication pair')
+    expect(accuracy.match(/data-pair=/g)).toHaveLength(144)
+    expect(accuracy.match(/scope="col"/g)).toHaveLength(12)
+    expect(accuracy.match(/scope="row"/g)).toHaveLength(12)
+    expect(accuracy).toContain('aria-label="9 × 6: 50% first-try correct (1 of 2 questions); 1 wrong submission; average first answer 2.00 s; average solve 4.00 s (2 solved)"')
+    expect(accuracy).toContain('aria-label="6 × 9: unattempted (0 questions)"')
     expect(html).toContain('First-try accuracy')
     expect(html).toContain('Unattempted')
     expect(html).toContain('0%')
     expect(html).toContain('100%')
     expect(html).not.toContain(' details"')
     expect(html).not.toContain('<h3>')
-    expect(html).toContain('<section class="stats-detail"></section>')
+    expect(html.match(/<section class="stats-detail"><\/section>/g)).toHaveLength(2)
+  })
+  it('adds a second ordered map using per-presentation mean solve time including corrections', () => {
+    const html = render()
+    const speed = table(html, 'Average solve time by ordered multiplication pair')
+    expect(speed.match(/data-pair=/g)).toHaveLength(144)
+    expect(speed.match(/scope="col"/g)).toHaveLength(12)
+    expect(speed.match(/scope="row"/g)).toHaveLength(12)
+    expect(speed).toContain('9 × 6: average solve 4.00 s (2 solved questions)')
+    expect(speed).toContain('including corrections')
+    expect(speed).toContain('>4.00 s</button>')
+    expect(html).toContain('Fastest 4.00 s')
+    expect(html).toContain('Slowest 4.00 s')
+  })
+  it('distinguishes wrong-only, missing, true zero and reversed pairs', () => {
+    const speed = table(render([
+      attempts[0],
+      { ...attempts[2], left: 6, right: 9, elapsedMs: 0 },
+    ]), 'Average solve time by ordered multiplication pair')
+    expect(speed).toContain('9 × 6: no solved questions (1 attempted question)')
+    expect(speed).toContain('6 × 9: average solve 0.00 s (1 solved question)')
+    expect(speed).toContain('1 × 1: unattempted (0 questions)')
+    expect(speed).toContain('>0.00 s</button>')
   })
 })

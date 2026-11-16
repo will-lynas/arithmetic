@@ -24,9 +24,9 @@ for (const tied of [true, false]) test(`round result and Stats agree with ${tied
   await page.getByRole('textbox',{name:'Answer'}).press('Enter')
   await expect(page.locator('.result-metrics > div').nth(1).locator('strong')).toHaveText('9 / 10')
   await page.getByRole('link',{name:'Stats',exact:true}).click()
-  await expect(page.locator('[data-pair="9x6"]')).toHaveText('0%')
+  await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('[data-pair="9x6"]')).toHaveText('0%')
   await page.reload()
-  await expect(page.locator('[data-pair="9x6"]')).toHaveText('0%')
+  await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('[data-pair="9x6"]')).toHaveText('0%')
 })
 
 test('two simultaneous restores have one owner, release on close and reload retain partial attempts', async ({page, context}) => {
