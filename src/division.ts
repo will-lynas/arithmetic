@@ -1,4 +1,7 @@
 export const DIVISION_PREFIX = 'arithmetic:division:event:v1:'
+export const DIVISION_ROUND_LENGTH = 5
+// Version-one rounds previously contained ten questions; keep their planned length.
+const LEGACY_ROUND_LENGTH = 10
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export type DivisionAttempt = DivisionQuestion & {version:1; kind:'attempt'; id:string; roundId:string; submittedAt:string; questionIndex:number; answerQuotient:number; answerRemainder:number; correct:boolean; elapsedMs:number; sequence:number}
 export type DivisionStart = {version:1; kind:'start'; id:string; roundId:string; submittedAt:string; questions:DivisionQuestion[]}
@@ -14,8 +17,8 @@ function isEvent(value:unknown): value is DivisionEvent {
   const e = value as DivisionEvent
   if (e.version!==1 || !UUID.test(e.id) || !UUID.test(e.roundId) || typeof e.submittedAt!=='string' || !Number.isFinite(Date.parse(e.submittedAt)) || new Date(e.submittedAt).toISOString()!==e.submittedAt) return false
   if(e.kind==='cancel') return true
-  if(e.kind==='start') return Array.isArray(e.questions) && e.questions.length===10 && e.questions.every(isQuestion)
-  return e.kind==='attempt' && isQuestion(e) && Number.isInteger(e.questionIndex) && e.questionIndex>=0 && e.questionIndex<10
+  if(e.kind==='start') return Array.isArray(e.questions) && [DIVISION_ROUND_LENGTH,LEGACY_ROUND_LENGTH].includes(e.questions.length) && e.questions.every(isQuestion)
+  return e.kind==='attempt' && isQuestion(e) && Number.isInteger(e.questionIndex) && e.questionIndex>=0 && e.questionIndex<LEGACY_ROUND_LENGTH
     && Number.isSafeInteger(e.answerQuotient) && Number.isSafeInteger(e.answerRemainder)
     && e.correct===(e.answerQuotient===e.quotient && e.answerRemainder===e.remainder)
     && Number.isFinite(e.elapsedMs) && e.elapsedMs>=0 && Number.isSafeInteger(e.sequence) && e.sequence>=0

@@ -33,6 +33,22 @@ test('failed writes and malformed or future source bytes never get repaired', ()
   expect(values.get('arithmetic:division:event:v9:future')).toBe('{"version":9}')
   expect(values.size).toBe(2)
 })
+test.each([5,10])('loads %i-question starts and every attempt without rewriting richer historical bytes', length => {
+  const {values} = storage()
+  const question = {divisor:12,quotient:12,remainder:11,dividend:155}
+  const started = {version:1,kind:'start',id,roundId,submittedAt:attempt.submittedAt,questions:Array.from({length},()=>({...question,extra:{kept:true}})),metadata:{source:'archived'}}
+  values.set(DIVISION_PREFIX+id,JSON.stringify(started,null,2))
+  for(let i=0;i<length;i++) {
+    const eventId = `00000000-0000-4000-8000-${String(i+10).padStart(12,'0')}`
+    values.set(DIVISION_PREFIX+eventId,JSON.stringify({...attempt,id:eventId,questionIndex:i,sequence:i,metadata:{retained:i}},null,2))
+  }
+  const before = new Map(values)
+  const loaded = loadDivisionEvents()
+  expect(loaded.warnings).toEqual([])
+  expect(loaded.events).toHaveLength(length+1)
+  expect(loaded.events[0]).toEqual(started)
+  expect(values).toEqual(before)
+})
 test('division spans the 12 by 12 tables plus zero and maximum remainders', () => {
   expect(divisionQuestion(() => 0)).toEqual({divisor:1, quotient:1, remainder:0, dividend:1})
   expect(divisionQuestion(() => 0.99999)).toEqual({divisor:12, quotient:12, remainder:11, dividend:155})

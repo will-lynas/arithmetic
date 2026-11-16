@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActiveClock, parseAnswer } from './game'
 import { acquireRound } from './ownership'
-import { appendDivisionEvent, divisionQuestion, loadDivisionEvents, type DivisionAttempt, type DivisionEvent, type DivisionStart } from './division'
+import { appendDivisionEvent, divisionQuestion, DIVISION_ROUND_LENGTH, loadDivisionEvents, type DivisionAttempt, type DivisionEvent, type DivisionStart } from './division'
 
 type Round = {start:DivisionStart; index:number; finished:boolean}
 export function DivisionPage({visible}:{visible:boolean}) {
@@ -53,8 +53,9 @@ export function DivisionPage({visible}:{visible:boolean}) {
         const input=inputs[invalid[0]?0:1].current;input?.focus();input?.select()
       } else {
         clock.current.setActive(false)
-        transition({...state,index:state.index+1,finished:state.index===9});clear();clock.current=new ActiveClock()
-        if(state.index===9) {owner.current?.();owner.current=null}
+        const finished=state.index+1===state.start.questions.length
+        transition({...state,index:state.index+1,finished});clear();clock.current=new ActiveClock()
+        if(finished) {owner.current?.();owner.current=null}
       }
     } else if(event.kind==='cancel') {
       clock.current.setActive(false);owner.current?.();owner.current=null;transition(null);clear()
@@ -71,7 +72,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
     const token=++generation.current
     claiming.current=true;setAvailable(false)
     const roundId=crypto.randomUUID()
-    const event:DivisionStart={version:1,kind:'start',id:crypto.randomUUID(),roundId,submittedAt:new Date().toISOString(),questions:Array.from({length:10},()=>divisionQuestion())}
+    const event:DivisionStart={version:1,kind:'start',id:crypto.randomUUID(),roundId,submittedAt:new Date().toISOString(),questions:Array.from({length:DIVISION_ROUND_LENGTH},()=>divisionQuestion())}
     try {
       const release=await acquireRound(roundId)
       if(token!==generation.current) {release?.();return}
@@ -113,15 +114,15 @@ export function DivisionPage({visible}:{visible:boolean}) {
       const starts=events.filter(e=>e.kind==='start')
       const unsafe=fresh.warnings.length || starts.length!==1 || events.some(e=>e.kind==='cancel') || new Set(submissions.map(e=>e.sequence)).size!==submissions.length || submissions.some(e=>{
         const q=started.questions[e.questionIndex]
-        return q.divisor!==e.divisor || q.dividend!==e.dividend || q.quotient!==e.quotient || q.remainder!==e.remainder
+        return !q || q.divisor!==e.divisor || q.dividend!==e.dividend || q.quotient!==e.quotient || q.remainder!==e.remainder
       })
       if(unsafe){release();owner.current=null;return}
       let index=0
-      while(index<10 && submissions.some(e=>e.questionIndex===index && e.correct))index++
+      while(index<started.questions.length && submissions.some(e=>e.questionIndex===index && e.correct))index++
       if(submissions.some(e=>e.questionIndex>index)){release();owner.current=null;setError('This saved division round could not be resumed safely. Its original data has been kept.');return}
-      transition({start:started,index,finished:index===10})
+      transition({start:started,index,finished:index===started.questions.length})
       clock.current=new ActiveClock(undefined,Math.max(0,...submissions.filter(e=>e.questionIndex===index).map(e=>e.elapsedMs)))
-      if(index===10){release();owner.current=null}
+      if(index===started.questions.length){release();owner.current=null}
       syncClock()
     }
     void restore().catch(()=>setError('Safe round ownership is unavailable. Existing division data has been kept.')).finally(()=>{if(token===generation.current){claiming.current=false;setAvailable(true)}})
@@ -146,14 +147,15 @@ export function DivisionPage({visible}:{visible:boolean}) {
   useEffect(()=>{syncClock();if(!visible)return;if(current.current && !current.current.finished && !failed)inputs[0].current?.focus();else action.current?.focus()},[visible,round?.index,round?.finished,failed])
   const question=round && !round.finished ? round.start.questions[round.index] : null
   const roundAttempts=attempts.filter(e=>e.roundId===round?.start.roundId)
-  const firstTry=Array.from({length:10},(_,i)=>roundAttempts.filter(e=>e.questionIndex===i).sort((a,b)=>a.sequence-b.sequence)[0]?.correct).filter(Boolean).length
-  const seconds=Array.from({length:10},(_,i)=>Math.max(0,...roundAttempts.filter(e=>e.questionIndex===i).map(e=>e.elapsedMs))).reduce((a,b)=>a+b,0)/1000
+  const plannedLength=round?.start.questions.length ?? DIVISION_ROUND_LENGTH
+  const firstTry=Array.from({length:plannedLength},(_,i)=>roundAttempts.filter(e=>e.questionIndex===i).sort((a,b)=>a.sequence-b.sequence)[0]?.correct).filter(Boolean).length
+  const seconds=Array.from({length:plannedLength},(_,i)=>Math.max(0,...roundAttempts.filter(e=>e.questionIndex===i).map(e=>e.elapsedMs))).reduce((a,b)=>a+b,0)/1000
   return <main aria-label="Division" hidden={!visible}>
     {warnings.map(w=><p className="storage-warning" role="alert" key={w}>{w}</p>)}
     {error && <div className="storage-warning" role="alert">{error}{failed && <button className="retry-save" onClick={()=>{if(pending.current)commit(pending.current)}}>Retry saving</button>}</div>}
-    {!round && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available || failed} onClick={()=>void start()}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
+    {!round && <section className="ready stage" aria-label="Ready"><p className="progress">{DIVISION_ROUND_LENGTH} questions</p><button ref={action} className="primary" disabled={!available || failed} onClick={()=>void start()}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
     {question && <section className="stage" aria-label="Division practice">
-      <p className="progress" aria-label="Question progress">{round!.index+1} / 10</p>
+      <p className="progress" aria-label="Question progress">{round!.index+1} / {plannedLength}</p>
       <div className="equation division-equation" data-invalid={wrong.some(Boolean)}>
         <span className="question" data-testid="division-question" aria-label={`${question.dividend} divided by ${question.divisor}`}>{question.dividend} <span className="operator">÷</span> {question.divisor}</span><span className="operator equals" aria-hidden="true">=</span>
         <div className="division-answers">{['Quotient','Remainder'].map((label,index)=><label className="division-field" key={label}><input ref={inputs[index]} aria-label={label} aria-invalid={wrong[index]} aria-describedby="division-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" type="text" value={values[index]} disabled={failed} onChange={e=>{const next=[...valuesRef.current];next[index]=e.target.value;valuesRef.current=next;setValues(next);setWrong([false,false]);setFeedback('');armed.current=true}}/><span>{label.toLowerCase()}</span></label>)}</div>
@@ -161,6 +163,6 @@ export function DivisionPage({visible}:{visible:boolean}) {
       <p id="division-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
       <p className="shortcut"><kbd>enter</kbd> submit <span className="key-gap"><kbd>tab</kbd> / <kbd>space</kbd> switch</span> <span className="key-gap"><kbd>esc</kbd> cancel</span></p>
     </section>}
-    {round?.finished && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+    {round?.finished && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / {plannedLength}</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
   </main>
 }
