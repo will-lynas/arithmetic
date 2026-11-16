@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActiveClock, parseAnswer, randomQuestion, restoreRound, type Round } from './game'
 import { appendAttempt, loadAttempts, loadStorageWarnings } from './storage'
 import type { AttemptRecord } from './types'
+import { StatsPage } from './StatsPage'
 
 function initialTheme() {
   try { return localStorage.getItem('arithmetic:theme') === 'light' ? 'light' : 'dark' }
@@ -73,7 +74,7 @@ export default function App() {
   useEffect(() => {
     const onRoute = () => {
       practiceRef.current = location.pathname === '/' || location.pathname === '/practice'
-      syncClock(); setPath(location.pathname)
+      syncClock(); setPath(location.pathname); refresh()
     }
     const refresh = () => { setAttempts(loadAttempts()); setWarnings(loadStorageWarnings()) }
     window.addEventListener('popstate', onRoute)
@@ -128,7 +129,7 @@ export default function App() {
   return <div className={`app ${theme}`}>
     <div className="shell">
       <header className="page-header">
-        <nav className="page-nav" aria-label="Main navigation"><a href="/" aria-current={practice ? 'page' : undefined} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')) }}>Practice</a></nav>
+        <nav className="page-nav" aria-label="Main navigation">{[{href:'/',label:'Practice'}, {href:'/stats',label:'Stats'}].map(({href,label}) => <a key={href} href={href} aria-current={(href === '/' ? practice : !practice) ? 'page' : undefined} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); history.pushState({}, '', href); window.dispatchEvent(new PopStateEvent('popstate')) }}>{label}</a>)}</nav>
         <button className="theme-toggle" type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">{theme === 'dark' ? <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></> : <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/>}</svg>
         </button>
@@ -149,6 +150,7 @@ export default function App() {
         </section>}
         {round.phase === 'finished' && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{[...first.values()].filter(a => a.correct).length}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
       </main>
+      {!practice && <main><StatsPage attempts={attempts}/></main>}
     </div>
   </div>
 }
