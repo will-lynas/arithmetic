@@ -13,7 +13,7 @@ test('direct stats load, reload, client navigation and browser history resolve c
   await expect(page.getByRole('button',{name:'Start',exact:true})).toBeHidden()
   await page.reload(); await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('.stats-cell')).toHaveCount(144)
   await page.getByRole('link',{name:'Practice',exact:true}).click()
-  await expect(page).toHaveURL(/\/$/); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  await expect(page).toHaveURL(/\/multiplication$/); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
   await page.goBack(); await expect(page.getByRole('region',{name:'Statistics',exact:true})).toBeVisible()
   await page.goForward(); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
 })
