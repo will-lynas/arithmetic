@@ -31,6 +31,7 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
   const scale = useMemo(() => speedScale(pairs.map(pair => pair.averageSolveMs)), [pairs])
   const completions = useMemo(() => speedScale(pairs.map(pair => pair.solved || null)), [pairs])
   const completionDigits = Math.max(...pairs.map(pair => String(pair.solved).length))
+  const completedSquares = pairs.filter(pair => pair.solved > 0).length
   const [selected, setSelected] = useState(() => {
     const first = Math.max(0, pairs.findIndex(pair => pair.questions > 0))
     return { accuracy: first, speed: first }
@@ -202,7 +203,10 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
     {heatmap('speed')}
     <div className="stats-map">
       <div className="stats-map-heading">
-        <h2>Completions</h2>
+        <div className="stats-completion-heading">
+          <h2>Completions</h2>
+          <span className="stats-completed-squares">{`Completed: ${completedSquares} / 144`}</span>
+        </div>
         <div className="stats-legend stats-completion-legend" aria-label="Completion count color scale">
           {completions.min === completions.max
             ? <span>{completions.min === null ? 'No completions' : `${completions.min} completion${completions.min === 1 ? '' : 's'}`}</span>

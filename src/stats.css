@@ -26,6 +26,8 @@
 .stats-summary dd { margin-top: 8px; color: var(--stats-text); font-size: 28px; line-height: 1.2; }
 .stats-map-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 14px; }
 .stats-map-heading h2 { margin: 0; color: var(--stats-text); font-size: 14px; font-weight: 500; }
+.stats-completion-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; }
+.stats-completed-squares { color: var(--stats-muted); font-size: 12px; white-space: nowrap; }
 .stats-legend { display: flex; align-items: center; gap: 8px; color: var(--stats-muted); font-size: 11px; white-space: nowrap; }
 .stats-legend-scale { width: 80px; height: 10px; border-radius: 2px; background: linear-gradient(to right, var(--stats-low), var(--stats-mid), var(--stats-high)); }
 .stats-speed-legend { flex-wrap: wrap; }
