@@ -1,0 +1,1 @@
+export default function App() { return <div className="app"><div className="shell"><header><nav aria-label="Main navigation"><a href="/" aria-current="page">Practice</a></nav></header><main><h1 className="visually-hidden">Arithmetic</h1></main></div></div> }

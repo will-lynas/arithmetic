@@ -1,0 +1,9 @@
+* { box-sizing: border-box; }
+:root { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+body { margin: 0; }
+.app { background: #323437; color: #d1d0c5; min-height: 100vh; }
+.shell { max-width: 1040px; width: calc(100% - 96px); margin: 0 auto; padding: 24px 0; }
+nav { display: flex; font-size: 13px; }
+nav a { color: #d1d0c5; padding: 8px 0; text-decoration: underline; text-underline-offset: 6px; text-decoration-color: #e2b714; }
+a:focus-visible { outline: 2px solid #e2b714; outline-offset: 4px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
