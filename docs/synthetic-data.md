@@ -1,0 +1,15 @@
+# Synthetic practice data
+
+Press **Ctrl+Alt+Shift+S** to open the hidden dialog. Nothing is changed until a replacement, restore or recovery is explicitly confirmed. There is no default visible entry point or URL trigger. The shortcut uses physical `KeyS`, ignores repeats/composition and unrelated text fields, and works from ordinary practice inputs. Cancel is initially focused; Escape dismisses.
+
+The loader replaces both games' real browser-local records with deterministic invented events, relative to load time. Normal practice, sampling and all three multiplication Stats grids use those records. Division includes five-question and historical ten-question plans. No separate aggregate/demo rendering path is used.
+
+## Scope and recovery
+
+Only localStorage keys beginning `arithmetic:attempt:`, `arithmetic:round-cancel:`, `arithmetic:division:`, `arithmetic:round:` or `arithmetic:division-round:` are replaced. This deliberately includes unreadable/future versions and unknown fields. Theme and all other keys are preserved. Each tab's two optional round hints are invalidated by a committed generation change; they are not history authority.
+
+The exact original key/value strings are stored in the version-one `arithmetic:synthetic:backup:v1` envelope, verified before the first history mutation, and retained unchanged across repeated loads **and restores**. Restore always returns to that first original snapshot, not the latest synthetic practice. It removes keys absent from the snapshot and verifies every original value. This is an origin-local recovery copy, not an off-device backup; clearing site data also removes it. Different hostnames, browser profiles and devices are separate.
+
+A durable `arithmetic:synthetic:journal:v1` records the complete intended target before changes. All writes/removals have exact readback, followed by whole-history verification. An interrupted/failed transaction blocks practice, including after reload. Reopen the hidden dialog and explicitly confirm recovery to finish its journal, or confirm Restore backup to return to the original snapshot. Insufficient quota may require freeing storage first; no partial operation is reported as success. Unsupported recovery envelopes are preserved and refused, never silently reset.
+
+Each new active/starting/pending-save round holds a shared origin-wide Web Lock before becoming playable. Replacement/restore/recovery require its exclusive counterpart; answer-event writes remain synchronous. A committed generation remounts cached game state and clears stale per-tab hints. Existing held round locks from older app versions are also detected and refused. Older already-open versions cannot honor a new protocol retroactively: close/reload those tabs before changing data. Browsers without Web Locks cannot perform these operations safely and are refused.

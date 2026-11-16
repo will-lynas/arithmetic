@@ -8,7 +8,7 @@ test('division Start focuses within the tap but blocks edits and submits until o
   await page.goto('/division');await expect(main(page).getByRole('button',{name:'Start',exact:true})).toBeEnabled()
   await page.evaluate(()=>{
     const w=window as any,request=navigator.locks.request.bind(navigator.locks)
-    navigator.locks.request=((...args:any[])=>new Promise(resolve=>{w.releaseClaim=()=>resolve((request as any)(...args))}))as any
+    navigator.locks.request=((...args:any[])=>String(args[0]).startsWith('arithmetic:round:')?new Promise(resolve=>{w.releaseClaim=()=>resolve((request as any)(...args))}):(request as any)(...args))as any
     w.focusLog=[];w.inClick=false
     document.addEventListener('click',()=>{w.inClick=true},true);document.addEventListener('click',()=>{w.inClick=false})
     document.addEventListener('focusin',e=>{if((e.target as HTMLElement).getAttribute('aria-label')==='Starting quotient')w.focusLog.push({inClick:w.inClick,readOnly:(e.target as HTMLInputElement).readOnly})})
@@ -19,6 +19,7 @@ test('division Start focuses within the tap but blocks edits and submits until o
   await expect(starting).toBeFocused();await page.keyboard.insertText('12');await starting.press('Enter')
   await expect(main(page).getByRole('button',{name:'Submit',exact:true})).toBeDisabled()
   expect(await events(page)).toHaveLength(0)
+  await expect.poll(()=>page.evaluate(()=>typeof (window as any).releaseClaim)).toBe('function')
   await page.evaluate(()=>(window as any).releaseClaim())
   await expect(quotient(page)).toBeFocused();await expect(quotient(page)).toHaveValue('')
   expect((await events(page)).filter(e=>e.kind==='start')).toHaveLength(1)
