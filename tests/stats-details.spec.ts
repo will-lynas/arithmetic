@@ -73,11 +73,13 @@ test('route remount and reload do not retain previous detail selection', async (
   await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('xpath=../following-sibling::section[1]')).toHaveText('')
 })
 
-test('touch release does not leave sticky details', async ({ browser, baseURL }) => {
+test('touch tap retains readable details until an outside tap', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 375, height: 812 } })
   const page = await context.newPage()
   await page.goto('/stats')
   await cell(page, '9x6').tap()
+  await expect(page.getByRole('region', { name: '9 × 6 details', exact: true })).toBeVisible()
+  await page.touchscreen.tap(1, 1)
   await expect(page.getByRole('table', { name: 'First-try accuracy by ordered multiplication pair', exact: true }).locator('xpath=../following-sibling::section[1]')).toHaveText('')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await context.close()

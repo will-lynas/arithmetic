@@ -129,12 +129,18 @@ test('empty and equal scales show no false contrast; nearby and extreme means re
   expect(await cell(page, speed, '5x1').evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true)
 })
 
-test('touch release clears both maps at mobile width', async ({ browser, baseURL }) => {
+test('touch taps retain one detail across maps and outside taps clear it', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 375, height: 812 } })
   const page = await context.newPage()
   await page.goto('/stats')
   for (const metric of [accuracy, speed]) {
     await cell(page, metric, '9x6').tap()
+    await expect(detail(page, metric)).toHaveAttribute('aria-label', '9 × 6 details')
+    const other = metric === speed ? accuracy : speed
+    await expect(detail(page, other)).toHaveText('')
+    await cell(page, metric, '6x9').tap()
+    await expect(detail(page, metric)).toHaveAttribute('aria-label', '6 × 9 details')
+    await page.touchscreen.tap(1, 1)
     await expect(detail(page, metric)).toHaveText('')
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -145,6 +151,11 @@ for (const theme of ['dark', 'light']) for (const width of [1440, 375]) {
   test(`speed geometry and screenshots ${theme} ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 })
     await seed(page, theme)
+    const neutral = page.getByLabel('Solve time color scale').locator('.stats-legend-empty')
+    const neutralLabel = page.getByLabel('Solve time color scale').getByText('Unsolved', { exact: true })
+    const swatchBox = (await neutral.boundingBox())!
+    const labelBox = (await neutralLabel.boundingBox())!
+    expect(Math.abs(swatchBox.y + swatchBox.height / 2 - labelBox.y - labelBox.height / 2)).toBeLessThan(3)
     const info = detail(page, speed)
     const before = await info.boundingBox()
     const accuracyBox = (await map(page, accuracy).boundingBox())!
