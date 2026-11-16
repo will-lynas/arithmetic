@@ -30,8 +30,40 @@ async function retained(page: Page, bytes: Record<string,string>) {
   expect(await page.evaluate(keys => Object.fromEntries(keys.map(k => [k,localStorage.getItem(k)])),Object.keys(bytes))).toEqual(bytes)
 }
 
+test('fresh history finishes a spaced first-coverage round with correction and durable completion',async({page})=>{
+  await page.addInitScript(()=>{
+    let state=73
+    Math.random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/2**32}
+  })
+  await page.goto('/')
+  await page.getByRole('button',{name:'Start',exact:true}).click()
+  const seen:string[]=[]
+  for(let i=0;i<10;i++) {
+    const question=page.getByTestId('question'), input=page.getByRole('textbox',{name:'Answer'})
+    await expect(input).toBeFocused()
+    const label=(await question.getAttribute('aria-label'))!
+    const [left,right]=label.split(' times ').map(Number)
+    expect(seen.slice(-2)).not.toContain(label)
+    expect(seen.slice(-2)).not.toContain(`${right} times ${left}`)
+    if(i===0) {
+      await input.fill('0'); await input.press('Enter')
+      await expect(question).toHaveAttribute('aria-label',label)
+    }
+    await input.fill(String(left!*right!)); await input.press('Enter')
+    seen.push(label)
+  }
+  expect(new Set(seen).size).toBe(10)
+  await expect(page.getByRole('button',{name:'New round',exact:true})).toBeVisible()
+  const bytes=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([k])=>k.startsWith('arithmetic:attempt:'))))
+  expect(Object.keys(bytes)).toHaveLength(11)
+  expect(Object.values(bytes).map(s=>JSON.parse(s)).filter(a=>a.correct)).toHaveLength(10)
+  await page.reload()
+  await expect(page.getByRole('button',{name:'New round',exact:true})).toBeVisible()
+  await retained(page,bytes)
+})
+
 test('lifetime coverage survives old canceled history, correction, advance and restore without rewriting source bytes', async ({page}) => {
-  await page.addInitScript(() => { let n=0; Math.random = () => n++%2 ? 0.005 : 0.75 })
+  await page.addInitScript(() => { Math.random = () => 0.005 })
   await page.goto('/')
   const rows = Array.from({length:263},(_,i) => ({
     version:1 as const,id:uuid(10000+i),roundId:uuid(20000+i),questionIndex:0,
@@ -51,7 +83,7 @@ test('lifetime coverage survives old canceled history, correction, advance and r
   },rows)
   await page.reload()
   await page.getByRole('button',{name:'Start',exact:true}).click()
-  // The weighted half must exclude 1x1's completed lifetime deficit; using
+  // The single weighted draw excludes 1x1's completed lifetime deficit; using
   // only the latest 256 presentations would incorrectly pick 1x1 here.
   await expect(page.getByTestId('question')).toHaveAttribute('aria-label','1 times 2')
   const input = page.getByRole('textbox',{name:'Answer'})
@@ -67,7 +99,7 @@ test('lifetime coverage survives old canceled history, correction, advance and r
 
 test('start, saved advance and restored advance sample full persisted history without touching source bytes', async ({page}) => {
   await page.clock.setFixedTime(new Date('2026-01-01T00:01:00.000Z'))
-  await page.addInitScript(() => { Math.random = () => 0.75 })
+  await page.addInitScript(() => { Math.random = () => Number(sessionStorage.getItem('test:draw') ?? '0.7') })
   await page.goto('/')
   const covered = Array.from({length:432},(_,i) => {
     const left=Math.floor(i/36)+1, right=Math.floor(i/3)%12+1
@@ -88,6 +120,7 @@ test('start, saved advance and restored advance sample full persisted history wi
   await page.getByRole('link',{name:'Stats',exact:true}).click()
   await page.getByRole('link',{name:'Practice',exact:true}).click()
   await expect(page.getByTestId('question')).toHaveAttribute('aria-label','9 times 6')
+  await page.evaluate(() => sessionStorage.setItem('test:draw','0.6'))
   await input.fill('54'); await input.press('Enter')
   await expect(page.getByTestId('question')).toHaveAttribute('aria-label','8 times 7')
   await expect(page.getByText('2 / 10',{exact:true})).toBeVisible()

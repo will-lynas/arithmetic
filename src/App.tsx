@@ -8,6 +8,8 @@ import { groupQuestions } from './questions'
 import { acquireRound } from './ownership'
 import { DivisionPage } from './DivisionPage'
 import { DivisionStatsRoute } from './DivisionStatsPage'
+import { aggregateStatistics } from './statistics'
+import { RoundCalculations } from './RoundCalculations'
 
 function resolvePath() {
   const aliases:Record<string,string> = {'/':'/multiplication','/practice':'/multiplication','/stats':'/multiplication/stats'}
@@ -226,6 +228,11 @@ export default function App() {
   const questions = groupQuestions(roundAttempts)
   const firstTry = questions.filter(submissions => submissions[0].correct).length
   const seconds = questions.reduce((sum, submissions) => sum + Math.max(...submissions.map(a => a.elapsedMs)), 0) / 1000
+  const completions = round.phase === 'finished' ? aggregateStatistics(attempts).pairs : []
+  const resultRows = round.phase === 'finished' ? [...questions].sort((a,b) => a[0].questionIndex - b[0].questionIndex).map(([{left,right}]) => ({
+    calculation: `${left} × ${right} = ${left * right}`,
+    completions: completions[(left - 1) * 12 + right - 1].solved,
+  })) : []
   return <div className={`app ${theme}`}>
     <div className="mode-layout">
       <nav className="mode-nav" aria-label="Arithmetic modes">{[{href:'/multiplication',label:'Multiplication'},{href:'/division',label:'Division'}].map(({href,label})=><a key={href} href={href} aria-current={(href==='/division'?!multiplication:multiplication)?'page':undefined} onClick={event=>navigate(event,href)}>{label}</a>)}</nav>
@@ -257,7 +264,7 @@ export default function App() {
           </div>
           <p className="shortcut"><kbd>enter</kbd> submit</p>
         </section>}
-        {round.phase === 'finished' && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+        {round.phase === 'finished' && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p><RoundCalculations rows={resultRows}/></section>}
       </main>
       {multiplication && !practice && <main><StatsPage attempts={attempts}/></main>}
       <DivisionPage visible={path === '/division'}/>
