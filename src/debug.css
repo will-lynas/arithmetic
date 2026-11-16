@@ -1,0 +1,32 @@
+.debug-page { padding: 32px 0; font-size: 12px; line-height: 1.6; }
+.debug-page h2 { margin: 0; font-size: 20px; }
+.debug-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.debug-heading button { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; min-height: 44px; }
+.debug-context { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 16px 0 24px; }
+.debug-context time { flex-basis: 100%; }
+.debug-summary { display: flex; flex-wrap: wrap; gap: 16px 36px; margin: 0 0 24px; }
+.debug-summary dt { color: var(--muted); }
+.debug-summary dd { margin: 4px 0 0; font-size: 18px; }
+.debug-page summary { color: var(--muted); cursor: pointer; padding: 8px 0; }
+.debug-page summary:focus-visible, .debug-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.debug-definitions p { max-width: 78ch; margin: 12px 0; }
+.debug-page h3 { margin: 28px 0 16px; font-size: 14px; font-weight: 500; }
+.debug-plots { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.debug-plot { margin: 0; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.debug-plot h4 { font-size: 13px; font-weight: 500; margin: 0; }
+.debug-plot figcaption span { display: block; color: var(--muted); font-size: 11px; }
+.debug-page table { border-collapse: collapse; width: 100%; font-size: 11px; }
+.debug-page td, .debug-page th { text-align: right; padding: 8px 10px; font-weight: 400; border-bottom: 1px solid var(--line); }
+.debug-page thead th { color: var(--muted); vertical-align: bottom; }
+.debug-page th:first-child, .debug-page td:first-child { text-align: left; padding-left: 0; }
+.debug-page .debug-plot td:first-child { overflow-wrap: anywhere; }
+.debug-breakdowns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.debug-table-scroll { max-width: 100%; overflow: auto; }
+.debug-ranking { white-space: nowrap; }
+.debug-ranking tbody tr[data-eligible="false"] { color: var(--muted); }
+.debug-ranking td:last-child { text-align: left; white-space: normal; min-width: 210px; }
+.debug-footer { margin: 8px 0 24px; font-size: 11px; }
+.debug-footer a { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); text-decoration: none; }
+.debug-footer a:hover { color: var(--text); }
+@media(max-width:1000px) { .debug-plots, .debug-breakdowns { grid-template-columns: minmax(0,1fr); } }
+@media(max-width:600px) { .debug-page { padding-top: 20px; } .debug-context { gap: 8px; } .debug-page h2 { font-size: 18px; } .debug-page td, .debug-page th { padding: 8px 4px; font-size: 10px; } .debug-heading { gap: 8px; } .debug-plots { gap: 16px; } }

@@ -42,11 +42,12 @@ export function questionWeights(attempts: readonly AttemptRecord[], now = Date.n
   // grouping (including conservative wrong-before-correct elapsed-time ties).
   const all = presentations(attempts, roundId)
   // Lifetime completion is independent of the bounded recent-difficulty window.
-  // Saturate derived counts; never persist counters or rewrite ledger records.
+  // Keep uncapped diagnostic counts; saturate only the coverage bonus below.
+  // Never persist counters or rewrite ledger records.
   const completed = new Map<string, number>()
   for (const q of all) if (q.completed) {
     const key = pair(q.left,q.right)
-    completed.set(key, Math.min(COVERAGE_TARGET, (completed.get(key) ?? 0) + 1))
+    completed.set(key, (completed.get(key) ?? 0) + 1)
   }
   const observations = all.slice(-HISTORY)
   const clean = observations.filter(a => !a.failed).slice(-BASELINE_WINDOW)
@@ -67,13 +68,18 @@ export function questionWeights(attempts: readonly AttemptRecord[], now = Date.n
     // Typed-submit latency is NOT response onset, nor a failure/mastery label.
     const slow = baseline !== null && times.length
       ? Math.min(1, Math.max(0, (median(times) - baseline) / Math.log(4))) * times.length / (times.length + 2) : 0
-    const coverageBoost = COVERAGE_STEP * (COVERAGE_TARGET - (completed.get(pair(left,right)) ?? 0))
-    const difficultyWeight = ERROR_BOOST * error + SPEED_BOOST * slow
-    return {left, right, weight:coverageBoost + difficultyWeight, coverageBoost, difficultyWeight}
+    const count = completed.get(pair(left,right)) ?? 0
+    const coverageBoost = COVERAGE_STEP * (COVERAGE_TARGET - Math.min(COVERAGE_TARGET, count))
+    const errorBoost = ERROR_BOOST * error, speedBoost = SPEED_BOOST * slow
+    const difficultyWeight = errorBoost + speedBoost
+    const weight = coverageBoost + difficultyWeight
+    return {left, right, weight, coverageBoost, difficultyWeight, errorBoost, speedBoost,
+      completed:count, floor:DRAW_FLOOR, total:DRAW_FLOOR + weight}
   })
 }
 
-export function sampleQuestion(attempts: readonly AttemptRecord[], random: () => number, now: number, roundId?: string) {
+// One eligibility authority for selection and read-only next-draw inspection.
+export function questionPool(attempts: readonly AttemptRecord[], now: number, roundId?: string) {
   const observations = presentations(attempts, roundId)
   const cooling = new Set(observations.slice(-2).flatMap(q => [pair(q.left,q.right), pair(q.right,q.left)]))
   const counts = new Map<string, number>()
@@ -82,8 +88,36 @@ export function sampleQuestion(attempts: readonly AttemptRecord[], random: () =>
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   // At most ten slots and four cooled pairs: the 144-fact pool cannot exhaust.
-  const choices = questionWeights(attempts, now, roundId).filter(q =>
-    !cooling.has(pair(q.left,q.right)) && (counts.get(pair(q.left,q.right)) ?? 0) < 2)
+  return questionWeights(attempts, now, roundId).map(q => {
+    const exclusions: string[] = []
+    if (cooling.has(pair(q.left,q.right))) exclusions.push('Last two observed presentations (either order)')
+    if ((counts.get(pair(q.left,q.right)) ?? 0) >= 2) exclusions.push('Two exact-pair presentations this round')
+    return {...q, eligible:exclusions.length === 0, exclusions}
+  })
+}
+
+export function samplerDiagnostics(attempts: readonly AttemptRecord[], now = Date.now(), roundId?: string) {
+  const pool = questionPool(attempts, now, roundId)
+  const eligible = pool.filter(q => q.eligible)
+  const totalWeight = eligible.reduce((sum,q) => sum + q.total, 0)
+  const rows = pool.map(q => {
+    const uniformProbability = q.eligible ? 0.5 / eligible.length : 0
+    const weightedProbability = q.eligible ? 0.5 * q.total / totalWeight : 0
+    return {...q, uniformProbability, weightedProbability, probability:uniformProbability + weightedProbability}
+  }).sort((a,b) => b.probability - a.probability || a.left - b.left || a.right - b.right)
+  const coverage = [0,1,2,3].map(completed => {
+    const cohort = rows.filter(q => Math.min(3,q.completed) === completed)
+    return {completed, count:cohort.length, probability:cohort.reduce((sum,q)=>sum+q.probability,0)}
+  })
+  const factors = (['floor','coverageBoost','errorBoost','speedBoost'] as const).map(key => ({key,
+    score:eligible.reduce((sum,q)=>sum+q[key],0),
+    count:rows.filter(q=>q[key]>0).length,
+  }))
+  return {rows, coverage, factors, now, eligibleCount:eligible.length, totalWeight}
+}
+
+export function sampleQuestion(attempts: readonly AttemptRecord[], random: () => number, now: number, roundId?: string) {
+  const choices = questionPool(attempts, now, roundId).filter(q => q.eligible)
   // Equal scores are uniform in either component; retain the single-draw path.
   if (choices.every(q => q.weight === choices[0]!.weight) || random() < 0.5) return choices[Math.floor(random() * choices.length)]!
   const total = choices.reduce((sum, q) => sum + DRAW_FLOOR + q.weight, 0)

@@ -1,0 +1,309 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`seeded sampler output and random-call count stay exactly unchanged 1`] = `
+[
+  {
+    "calls": 24,
+    "draws": [
+      {
+        "left": 4,
+        "right": 3,
+      },
+      {
+        "left": 11,
+        "right": 10,
+      },
+      {
+        "left": 10,
+        "right": 8,
+      },
+      {
+        "left": 5,
+        "right": 6,
+      },
+      {
+        "left": 1,
+        "right": 6,
+      },
+      {
+        "left": 3,
+        "right": 6,
+      },
+      {
+        "left": 10,
+        "right": 9,
+      },
+      {
+        "left": 7,
+        "right": 3,
+      },
+      {
+        "left": 8,
+        "right": 9,
+      },
+      {
+        "left": 10,
+        "right": 4,
+      },
+      {
+        "left": 12,
+        "right": 1,
+      },
+      {
+        "left": 9,
+        "right": 9,
+      },
+      {
+        "left": 12,
+        "right": 2,
+      },
+      {
+        "left": 5,
+        "right": 5,
+      },
+      {
+        "left": 9,
+        "right": 2,
+      },
+      {
+        "left": 7,
+        "right": 6,
+      },
+      {
+        "left": 11,
+        "right": 8,
+      },
+      {
+        "left": 6,
+        "right": 1,
+      },
+      {
+        "left": 3,
+        "right": 3,
+      },
+      {
+        "left": 5,
+        "right": 7,
+      },
+      {
+        "left": 12,
+        "right": 9,
+      },
+      {
+        "left": 8,
+        "right": 7,
+      },
+      {
+        "left": 4,
+        "right": 12,
+      },
+      {
+        "left": 6,
+        "right": 10,
+      },
+    ],
+  },
+  {
+    "calls": 48,
+    "draws": [
+      {
+        "left": 11,
+        "right": 10,
+      },
+      {
+        "left": 5,
+        "right": 8,
+      },
+      {
+        "left": 3,
+        "right": 7,
+      },
+      {
+        "left": 7,
+        "right": 5,
+      },
+      {
+        "left": 10,
+        "right": 5,
+      },
+      {
+        "left": 9,
+        "right": 10,
+      },
+      {
+        "left": 5,
+        "right": 7,
+      },
+      {
+        "left": 7,
+        "right": 7,
+      },
+      {
+        "left": 6,
+        "right": 3,
+      },
+      {
+        "left": 5,
+        "right": 9,
+      },
+      {
+        "left": 8,
+        "right": 8,
+      },
+      {
+        "left": 6,
+        "right": 11,
+      },
+      {
+        "left": 7,
+        "right": 4,
+      },
+      {
+        "left": 8,
+        "right": 5,
+      },
+      {
+        "left": 3,
+        "right": 6,
+      },
+      {
+        "left": 5,
+        "right": 4,
+      },
+      {
+        "left": 8,
+        "right": 10,
+      },
+      {
+        "left": 12,
+        "right": 11,
+      },
+      {
+        "left": 3,
+        "right": 3,
+      },
+      {
+        "left": 4,
+        "right": 4,
+      },
+      {
+        "left": 1,
+        "right": 4,
+      },
+      {
+        "left": 6,
+        "right": 6,
+      },
+      {
+        "left": 2,
+        "right": 4,
+      },
+      {
+        "left": 8,
+        "right": 3,
+      },
+    ],
+  },
+  {
+    "calls": 24,
+    "draws": [
+      {
+        "left": 4,
+        "right": 2,
+      },
+      {
+        "left": 11,
+        "right": 9,
+      },
+      {
+        "left": 10,
+        "right": 7,
+      },
+      {
+        "left": 5,
+        "right": 5,
+      },
+      {
+        "left": 1,
+        "right": 6,
+      },
+      {
+        "left": 3,
+        "right": 6,
+      },
+      {
+        "left": 10,
+        "right": 8,
+      },
+      {
+        "left": 7,
+        "right": 3,
+      },
+      {
+        "left": 8,
+        "right": 9,
+      },
+      {
+        "left": 10,
+        "right": 3,
+      },
+      {
+        "left": 11,
+        "right": 12,
+      },
+      {
+        "left": 9,
+        "right": 9,
+      },
+      {
+        "left": 12,
+        "right": 1,
+      },
+      {
+        "left": 5,
+        "right": 5,
+      },
+      {
+        "left": 9,
+        "right": 1,
+      },
+      {
+        "left": 7,
+        "right": 6,
+      },
+      {
+        "left": 11,
+        "right": 7,
+      },
+      {
+        "left": 6,
+        "right": 1,
+      },
+      {
+        "left": 3,
+        "right": 2,
+      },
+      {
+        "left": 5,
+        "right": 7,
+      },
+      {
+        "left": 12,
+        "right": 8,
+      },
+      {
+        "left": 8,
+        "right": 6,
+      },
+      {
+        "left": 4,
+        "right": 11,
+      },
+      {
+        "left": 6,
+        "right": 9,
+      },
+    ],
+  },
+]
+`;
