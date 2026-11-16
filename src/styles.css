@@ -42,4 +42,19 @@ h2 { font-size: 18px; font-weight: 500; margin: 0 0 32px; }
 [hidden] { display: none !important; }
 @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @media (max-width: 600px) { .shell { width: calc(100% - 40px); } .stage { padding-top: 120px; } .equation { gap: 12px; } .result-metrics { gap: 28px; } }
+.mode-layout { display: grid; grid-template-columns: 144px minmax(0, 1040px); gap: 40px; max-width: 1280px; width: calc(100% - 64px); margin: 0 auto; }
+.mode-layout .shell { width: 100%; min-width: 0; }
+.mode-nav { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding-top: 24px; font-size: 13px; }
+.mode-nav a { color: var(--muted); text-decoration: none; padding: 8px 0 8px 12px; border-left: 2px solid transparent; }
+.mode-nav a:hover, .mode-nav a[aria-current="page"] { color: var(--text); }
+.mode-nav a[aria-current="page"] { border-left-color: var(--accent); }
+.division-equation { align-items: flex-start; }
+.division-equation .question, .division-equation .equals { padding-top: 3px; }
+.division-answers { display: flex; gap: 20px; }
+.division-field { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.division-field > span { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.division-equation .division-field input { width: 2.8ch; min-width: 2.8ch; }
+.key-gap { display: inline-block; margin-left: 16px; }
+@media (max-width: 1000px) { .mode-layout { grid-template-columns: 128px minmax(0,1fr); gap: 24px; } .division-equation { flex-wrap: wrap; gap: 16px; } .division-answers { flex-basis: 100%; justify-content: center; } }
+@media (max-width: 600px) { .mode-layout { width: calc(100% - 24px); grid-template-columns: 88px minmax(0,1fr); gap: 12px; } .mode-nav { font-size: 10px; } .mode-nav a { padding-left: 6px; } .mode-layout .equation { font-size: 28px; gap: 8px; } .division-answers { margin-top: 8px; gap: 20px; } .division-field > span { font-size: 11px; } .key-gap { margin-left: 0; margin-top: 12px; display: block; } .mode-layout .primary { min-width: 0; } .mode-layout .result-metrics { gap: 16px; flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

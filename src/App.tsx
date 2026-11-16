@@ -5,6 +5,18 @@ import type { AttemptRecord } from './types'
 import { StatsPage } from './StatsPage'
 import { groupQuestions } from './questions'
 import { acquireRound } from './ownership'
+import { DivisionPage } from './DivisionPage'
+
+function resolvePath() {
+  const aliases:Record<string,string> = {'/':'/multiplication','/practice':'/multiplication','/stats':'/multiplication/stats','/division/stats':'/division'}
+  const path=aliases[location.pathname] ?? location.pathname
+  if(path!==location.pathname) history.replaceState({},'',path+location.search+location.hash)
+  return path
+}
+function navigate(event:React.MouseEvent<HTMLAnchorElement>,href:string) {
+  if(event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault();history.pushState({},'',href);window.dispatchEvent(new PopStateEvent('popstate'))
+}
 
 function initialTheme() {
   try { return localStorage.getItem('arithmetic:theme') === 'light' ? 'light' : 'dark' }
@@ -19,11 +31,13 @@ export default function App() {
   const [available, setAvailable] = useState(false)
   const roundRef = useRef(round)
   const clock = useRef(new ActiveClock(undefined, round.phase === 'playing' ? round.elapsedMs : 0))
-  const [path, setPath] = useState(location.pathname)
-  const practice = path === '/' || path === '/practice'
+  const [path, setPath] = useState(resolvePath)
+  const practice = path === '/multiplication'
+  const multiplication = path !== '/division'
   const practiceRef = useRef(practice)
   practiceRef.current = practice
   const [theme, setTheme] = useState(initialTheme)
+  const [themeError,setThemeError] = useState('')
   const [warnings, setWarnings] = useState(loadStorageWarnings)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
@@ -132,8 +146,9 @@ export default function App() {
   }
   useEffect(() => {
     const onRoute = () => {
-      practiceRef.current = location.pathname === '/' || location.pathname === '/practice'
-      syncClock(); setPath(location.pathname); refresh()
+      const next=resolvePath()
+      practiceRef.current = next === '/multiplication'
+      syncClock(); setPath(next); refresh()
     }
     const refresh = () => { setAttempts(loadAttempts()); setWarnings(loadStorageWarnings()) }
     window.addEventListener('popstate', onRoute)
@@ -174,24 +189,29 @@ export default function App() {
       if (old !== null && old !== 'light' && old !== 'dark') throw new Error('Unknown theme')
       localStorage.setItem('arithmetic:theme', next)
       if (localStorage.getItem('arithmetic:theme') !== next) throw new Error('Theme not saved')
-      setTheme(next)
-    } catch { setError('Theme could not be saved. Existing browser data has been kept.') }
+      setTheme(next);setThemeError('')
+    } catch { setThemeError('Theme could not be saved. Existing browser data has been kept.') }
   }
   const roundAttempts = round.phase === 'ready' ? [] : attempts.filter(a => a.roundId === round.roundId)
   const questions = groupQuestions(roundAttempts)
   const firstTry = questions.filter(submissions => submissions[0].correct).length
   const seconds = questions.reduce((sum, submissions) => sum + Math.max(...submissions.map(a => a.elapsedMs)), 0) / 1000
   return <div className={`app ${theme}`}>
+    <div className="mode-layout">
+      <nav className="mode-nav" aria-label="Arithmetic modes">{[{href:'/multiplication',label:'Multiplication'},{href:'/division',label:'Division'}].map(({href,label})=><a key={href} href={href} aria-current={(href==='/division'?!multiplication:multiplication)?'page':undefined} onClick={event=>navigate(event,href)}>{label}</a>)}</nav>
     <div className="shell">
       <header className="page-header">
-        <nav className="page-nav" aria-label="Main navigation">{[{href:'/',label:'Practice'}, {href:'/stats',label:'Stats'}].map(({href,label}) => <a key={href} href={href} aria-current={(href === '/' ? practice : !practice) ? 'page' : undefined} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); history.pushState({}, '', href); window.dispatchEvent(new PopStateEvent('popstate')) }}>{label}</a>)}</nav>
+        {multiplication ? <nav className="page-nav" aria-label="Main navigation">{[{href:'/multiplication',label:'Practice'}, {href:'/multiplication/stats',label:'Stats'}].map(({href,label}) => <a key={href} href={href} aria-current={(href === '/multiplication' ? practice : !practice) ? 'page' : undefined} onClick={event => navigate(event,href)}>{label}</a>)}</nav> : <span/>}
         <button className="theme-toggle" type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">{theme === 'dark' ? <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></> : <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/>}</svg>
         </button>
       </header>
       <h1 className="visually-hidden">Arithmetic</h1>
+      {themeError && <p className="storage-warning" role="alert">{themeError}</p>}
+      <div hidden={!multiplication}>
       {warnings.map(warning => <p className="storage-warning" role="alert" key={warning}>{warning}</p>)}
       {error && <div className="storage-warning" role="alert">{error}{savingFailed && <button className="retry-save" onClick={() => { if (pending.current) commit(pending.current) }}>Retry saving</button>}</div>}
+      </div>
       <main className="practice-page" hidden={!practice}>
         {round.phase === 'ready' && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available} onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
         {round.phase === 'playing' && <section className="stage" aria-label="Multiplication practice">
@@ -205,7 +225,9 @@ export default function App() {
         </section>}
         {round.phase === 'finished' && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
       </main>
-      {!practice && <main><StatsPage attempts={attempts}/></main>}
+      {multiplication && !practice && <main><StatsPage attempts={attempts}/></main>}
+      <DivisionPage visible={!multiplication}/>
+    </div>
     </div>
   </div>
 }
