@@ -11,45 +11,65 @@ export function generateSyntheticHistory(now=Date.now(),seed=71):HistoryBytes {
   const history:HistoryBytes={}
   const date=(time:number)=>new Date(time).toISOString()
   const add=(event:AttemptRecord)=>{history[ATTEMPT_PREFIX+event.id]=JSON.stringify(event)}
-  for(let pair=0;pair<144;pair++) {
-    const left=Math.floor(pair/12)+1,right=pair%12+1,count=pair%6
-    for(let sample=0;sample<count;sample++) {
-      const roundId=id(),old=(pair+sample)%3===0
-      const time=now-(old?60*86400000:3600000)-(144-pair)*60000-sample*1000
-      const elapsed=pair%17===0?0:pair%13===0?28000+sample*900:450+Math.floor(random()*6500)
-      const base={version:1 as const,roundId,questionIndex:0,left,right}
-      if((pair+sample)%7===0)add({...base,id:id(),answer:left*right+1,correct:false,elapsedMs:elapsed/2,submittedAt:date(time)})
-      add({...base,id:id(),answer:left*right,correct:true,elapsedMs:elapsed,submittedAt:date(time+500)})
-      if(sample%2===0)history[CANCELLATION_PREFIX+roundId]=JSON.stringify({version:1,roundId,canceledAt:date(time+1000)})
+  const integer=(n:number)=>Math.floor(random()*n)
+  const shuffle=<T,>(items:T[])=>{for(let i=items.length-1;i>0;i--){const j=integer(i+1);[items[i],items[j]]=[items[j],items[i]]}return items}
+  // Bounded, positively skewed retrieval times, not zero/extreme test fixtures.
+  const duration=(base:number)=>Math.round(base*Math.exp((random()+random()+random()-1.5)*0.8))
+  const pairs=Array.from({length:144},(_,i)=>{
+    const left=Math.floor(i/12)+1,right=i%12+1
+    const easy=[1,2,5,10].includes(left) || [1,2,5,10].includes(right)
+    // Independent per-fact familiarity plus cohort trends; operand order stays distinct.
+    const familiarity=0.85+random()*0.3,nine=left===9 || right===9,twelve=left===12 || right===12
+    return {left,right,speed:2400*familiarity*(easy?0.72:1.1)*(nine?2.5:1),error:(twelve?0.42:easy?0.045:0.13)*(0.8+random()*0.4)}
+  })
+  const practice=shuffle(pairs.flatMap(pair=>Array.from({length:10+integer(11)},()=>pair)))
+  const regularRounds=Math.ceil(practice.length/10),rounds=regularRounds+12
+  for(let round=0;round<rounds;round++) {
+    const roundId=id(),regular=round<regularRounds
+    const questions=regular?practice.slice(round*10,round*10+10):Array.from({length:1+integer(6)},()=>pairs[integer(144)])
+    let time=now-(rounds-round)*12*3600000+integer(3*3600000)
+    for(const [questionIndex,{left,right,speed,error}] of questions.entries()) {
+      const base={version:1 as const,roundId,questionIndex,left,right}
+      let elapsed=duration(speed)
+      const wrong=random()<error
+      if(wrong) {
+        time+=elapsed
+        add({...base,id:id(),answer:left*right+1+integer(4),correct:false,elapsedMs:elapsed,submittedAt:date(time)})
+        const correction=duration(1600)
+        elapsed+=correction;time+=correction
+      } else time+=elapsed
+      add({...base,id:id(),answer:left*right,correct:true,elapsedMs:elapsed,submittedAt:date(time)})
+      time+=600+integer(1600)
     }
-    // Some zero-completion facts have wrong-only observations; others untouched.
-    if(pair%12===6) {
-      const roundId=id(),time=now-7200000-pair*1000
-      add({version:1,id:id(),roundId,questionIndex:0,left,right,answer:left*right+2,correct:false,elapsedMs:9000,submittedAt:date(time)})
-      history[CANCELLATION_PREFIX+roundId]=JSON.stringify({version:1,roundId,canceledAt:date(time+1000)})
-    }
+    // Partials are canceled: no manufactured active round on reload.
+    if(questions.length<10)history[CANCELLATION_PREFIX+roundId]=JSON.stringify({version:1,roundId,canceledAt:date(time+1000)})
   }
-  // One complete latest round makes reload deterministic, never auto-starting.
-  const complete=id()
-  for(let index=0;index<10;index++)add({version:1,id:id(),roundId:complete,questionIndex:index,left:12,right:index+1,answer:12*(index+1),correct:true,elapsedMs:index===0?0:700+index*400,submittedAt:date(now-600000+index*1000)})
   const division=(event:DivisionEvent)=>{history[DIVISION_PREFIX+event.id]=JSON.stringify(event)}
-  for(let divisor=1;divisor<=12;divisor++) for(let sample=0;sample<3;sample++) {
-    const roundId=id(),time=now-(sample===0?45*86400000:1800000)-divisor*60000-sample*10000
-    const questions:DivisionQuestion[]=Array.from({length:sample===0?10:5},(_,i)=>{
-      const quotient=1+Math.floor(random()*12),remainder=i%2===0?0:Math.floor(random()*divisor)
+  for(let round=0;round<96;round++) {
+    const roundId=id(),length=round<8?10:5,partial=round>=88
+    let time=now-(97-round)*86400000+integer(3*3600000)
+    const questions:DivisionQuestion[]=Array.from({length},()=>{
+      const divisor=1+integer(12),quotient=1+integer(12),remainder=integer(divisor)
       return {divisor,quotient,remainder,dividend:divisor*quotient+remainder}
     })
     const start:DivisionStart={version:1,kind:'start',id:id(),roundId,submittedAt:date(time),questions}
     division(start)
     let sequence=0
-    const count=sample===0?questions.length:sample===1?3:1
-    for(let index=0;index<count;index++) {
-      const q=questions[index],elapsed=divisor===1 && index===0?0:divisor%4===0?35000:900+Math.floor(random()*12000)
-      const base={version:1 as const,kind:'attempt' as const,roundId,questionIndex:index,...q}
-      if((divisor+index)%3===0 || sample===2)division({...base,id:id(),answerQuotient:q.quotient+1,answerRemainder:q.remainder,correct:false,elapsedMs:elapsed/2,sequence:sequence++,submittedAt:date(time+index*2000+500)})
-      if(sample!==2)division({...base,id:id(),answerQuotient:q.quotient,answerRemainder:q.remainder,correct:true,elapsedMs:elapsed,sequence:sequence++,submittedAt:date(time+index*2000+1000)})
+    const count=partial?1+integer(3):length
+    for(let questionIndex=0;questionIndex<count;questionIndex++) {
+      const q=questions[questionIndex],base={version:1 as const,kind:'attempt' as const,roundId,questionIndex,...q}
+      let elapsed=duration(5200)
+      const wrong=random()<0.23
+      if(wrong) {
+        time+=elapsed
+        division({...base,id:id(),answerQuotient:q.quotient+1,answerRemainder:q.remainder,correct:false,elapsedMs:elapsed,sequence:sequence++,submittedAt:date(time)})
+        const correction=duration(2300)
+        elapsed+=correction;time+=correction
+      } else time+=elapsed
+      division({...base,id:id(),answerQuotient:q.quotient,answerRemainder:q.remainder,correct:true,elapsedMs:elapsed,sequence:sequence++,submittedAt:date(time)})
+      time+=1000+integer(2000)
     }
-    if(sample===2)division({version:1,kind:'cancel',id:id(),roundId,submittedAt:date(time+15000)})
+    if(partial)division({version:1,kind:'cancel',id:id(),roundId,submittedAt:date(time+1000)})
   }
   return history
 }
