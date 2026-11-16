@@ -63,6 +63,7 @@
 @media (max-width: 760px) {
   .stats-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 16px; }
   .stats-map-heading { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .stats-legend { max-width: 100%; flex-wrap: wrap; }
   .stats-heatmap { min-width: 680px; }
   .stats-detail { flex-direction: column; gap: 20px; min-height: 215px; }
   .stats-detail dl { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
