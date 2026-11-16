@@ -1,3 +1,4 @@
+import { assertNoReplacement } from './syntheticStore'
 export const DIVISION_PREFIX = 'arithmetic:division:event:v1:'
 export const DIVISION_ROUND_LENGTH = 5
 // Version-one rounds previously contained ten questions; keep their planned length.
@@ -24,6 +25,7 @@ function isEvent(value:unknown): value is DivisionEvent {
     && Number.isFinite(e.elapsedMs) && e.elapsedMs>=0 && Number.isSafeInteger(e.sequence) && e.sequence>=0
 }
 export function appendDivisionEvent(event:DivisionEvent) {
+  assertNoReplacement()
   if(!isEvent(event)) throw new Error('Invalid division event')
   const key = DIVISION_PREFIX+event.id, bytes = JSON.stringify(event)
   const previous = localStorage.getItem(key)

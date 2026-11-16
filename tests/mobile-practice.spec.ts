@@ -20,7 +20,7 @@ test('Start focuses an editable input inside the tap, but cannot submit before o
   await page.evaluate(() => {
     const w=window as any
     const request=navigator.locks.request.bind(navigator.locks)
-    navigator.locks.request=((...args: any[]) => new Promise(resolve => { w.releaseClaim=()=>resolve((request as any)(...args)) })) as any
+    navigator.locks.request=((...args: any[]) => String(args[0]).startsWith('arithmetic:round:') ? new Promise(resolve => { w.releaseClaim=()=>resolve((request as any)(...args)) }) : (request as any)(...args)) as any
     w.focusLog=[]; w.inClick=false
     document.addEventListener('click',()=>{w.inClick=true},true)
     document.addEventListener('click',()=>{w.inClick=false})
@@ -38,6 +38,7 @@ test('Start focuses an editable input inside the tap, but cannot submit before o
   await page.keyboard.insertText('144')
   await starting.press('Enter')
   expect(await records(page)).toHaveLength(0)
+  await expect.poll(()=>page.evaluate(()=>typeof (window as any).releaseClaim)).toBe('function')
   await page.evaluate(() => { (window as any).releaseClaim() })
   await expect(page.getByRole('button',{name:'Submit',exact:true})).toBeEnabled()
   await expect(input).toBeFocused()

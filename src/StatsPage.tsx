@@ -29,6 +29,8 @@ function speedLabel(pair: PairStatistics): string {
 export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) {
   const { pairs, summary } = useMemo(() => aggregateStatistics(attempts), [attempts])
   const scale = useMemo(() => speedScale(pairs.map(pair => pair.averageSolveMs)), [pairs])
+  const completions = useMemo(() => speedScale(pairs.map(pair => pair.solved || null)), [pairs])
+  const completionDigits = Math.max(...pairs.map(pair => String(pair.solved).length))
   const [selected, setSelected] = useState(() => {
     const first = Math.max(0, pairs.findIndex(pair => pair.questions > 0))
     return { accuracy: first, speed: first }
@@ -198,5 +200,38 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
     </dl>
     {heatmap('accuracy')}
     {heatmap('speed')}
+    <div className="stats-map">
+      <div className="stats-map-heading">
+        <h2>Completions</h2>
+        <div className="stats-legend stats-completion-legend" aria-label="Completion count color scale">
+          {completions.min === completions.max
+            ? <span>{completions.min === null ? 'No completions' : `${completions.min} completion${completions.min === 1 ? '' : 's'}`}</span>
+            : <span>Fewest {completions.min}</span>}
+          <span className="stats-legend-scale" data-equal={completions.min === completions.max} data-empty={completions.min === null} aria-hidden="true" />
+          {completions.min !== completions.max && <span>Most {completions.max}</span>}
+          {completions.min !== null && <span className="stats-legend-key"><span className="stats-legend-empty" aria-hidden="true" /><span>0</span></span>}
+        </div>
+      </div>
+      <div className="stats-map-scroll" role="region" aria-label="Multiplication completions map" tabIndex={0}>
+        <table className="stats-heatmap" aria-label="Completions by ordered multiplication pair"
+          // Keep long lifetime counts legible by scrolling, not clipping or shrinking them.
+          style={completionDigits > 5 ? { minWidth: `${(completionDigits * 8 + 8) * 12 + 84}px` } : undefined}>
+          <thead><tr><td aria-hidden="true">×</td>{factors.map(right => <th scope="col" key={right}>{right}</th>)}</tr></thead>
+          <tbody>{factors.map(left => <tr key={left}>
+            <th scope="row">{left}</th>
+            {factors.map(right => {
+              const count = pairs[(left - 1) * 12 + right - 1].solved
+              const position = speedPosition(count || null, completions)
+              const fill = position === null ? undefined : position <= 0.5
+                ? `color-mix(in srgb, var(--stats-low), var(--stats-mid) ${position * 200}%)`
+                : `color-mix(in srgb, var(--stats-mid), var(--stats-high) ${(position - 0.5) * 200}%)`
+              return <td key={right} data-pair={`${left}x${right}`} aria-label={`${left} × ${right}: ${count} completion${count === 1 ? '' : 's'}`}>
+                <span className="stats-cell stats-completion" data-attempted={count > 0} style={{ backgroundColor: fill }}>{count}</span>
+              </td>
+            })}
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </div>
   </section>
 }

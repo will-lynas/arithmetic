@@ -25,6 +25,7 @@
   .division-stats-table thead th { font-size: 11px; }
 }
 @media (max-width: 360px) {
+  .division-stats-summary dd { font-size: 20px; }
   .division-stats-table { font-size: 11px; }
   .division-stats-table thead th { font-size: 10px; }
   .division-stats-table th, .division-stats-table td { padding-inline: 2px; }

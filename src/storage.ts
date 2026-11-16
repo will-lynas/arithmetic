@@ -1,4 +1,5 @@
 import type { AttemptRecord } from './types'
+import { assertNoReplacement } from './syntheticStore'
 export const ATTEMPT_PREFIX = 'arithmetic:attempt:v1:'
 export const CANCELLATION_PREFIX = 'arithmetic:round-cancel:v1:'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -23,6 +24,7 @@ function isCancellation(value: unknown, roundId: string): boolean {
     && new Date(r.canceledAt).toISOString() === r.canceledAt
 }
 export function cancelRound(roundId: string): void {
+  assertNoReplacement()
   if (!UUID.test(roundId)) throw new Error('Invalid round')
   const key = CANCELLATION_PREFIX + roundId
   const previous = localStorage.getItem(key)
@@ -69,6 +71,7 @@ export function loadCanceledRounds(): ReadonlySet<string> { return read().cancel
 export function loadAttempts(): AttemptRecord[] { return read().attempts }
 export function loadStorageWarnings(): string[] { return read().warnings }
 export function appendAttempt(record: AttemptRecord): void {
+  assertNoReplacement()
   if (!isAttempt(record)) throw new Error('Invalid attempt; nothing was saved.')
   const key = ATTEMPT_PREFIX + record.id
   const bytes = JSON.stringify(record)
