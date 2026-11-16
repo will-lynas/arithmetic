@@ -17,9 +17,9 @@ export function parseAnswer(text: string): number | null {
   return Number.isSafeInteger(answer) ? answer : null
 }
 export type Round = {phase: 'ready'} | {phase: 'playing'; roundId: string; questionIndex: number; left: number; right: number; elapsedMs: number} | {phase: 'finished'; roundId: string}
-export function restoreRound(attempts: AttemptRecord[]): Round {
+export function restoreRound(attempts: AttemptRecord[], canceledRounds: ReadonlySet<string> = new Set()): Round {
   const last = attempts.at(-1)
-  if (!last) return { phase: 'ready' }
+  if (!last || canceledRounds.has(last.roundId)) return { phase: 'ready' }
   const round = attempts.filter(a => a.roundId === last.roundId)
   const questions = groupQuestions(round)
   // Old concurrent tabs may have assigned two pairs to one slot. Keep their

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActiveClock, parseAnswer, randomQuestion, restoreRound, type Round } from './game'
-import { appendAttempt, loadAttempts, loadStorageWarnings } from './storage'
+import { appendAttempt, cancelRound, loadAttempts, loadCanceledRounds, loadStorageWarnings } from './storage'
 import type { AttemptRecord } from './types'
 import { StatsPage } from './StatsPage'
 import { groupQuestions } from './questions'
@@ -51,7 +51,7 @@ export default function App() {
       owner.current = release
       // Refresh inside ownership: another owner may have finished before release.
       const next = restoring && candidate.phase !== 'ready'
-        ? restoreRound(loadAttempts().filter(a => a.roundId === candidate.roundId)) : candidate
+        ? restoreRound(loadAttempts().filter(a => a.roundId === candidate.roundId), loadCanceledRounds()) : candidate
       transition(next)
       if (next.phase !== 'ready') {
         // Per-tab reload hint only; attempts remain the immutable authority.
@@ -79,9 +79,10 @@ export default function App() {
     try {
       const roundId = sessionStorage.getItem('arithmetic:round:v1')
       const matching = saved.filter(a => a.roundId === roundId)
-      if (matching.length) preferred = matching
+      if (loadCanceledRounds().has(roundId ?? '')) preferred = []
+      else if (matching.length) preferred = matching
     } catch { /* Fall back to the existing ledger, never overwrite it. */ }
-    void claim(restoreRound(preferred), true)
+    void claim(restoreRound(preferred, loadCanceledRounds()), true)
     const release = () => {
       generation.current++; claiming.current = true
       clock.current.setActive(false); owner.current?.(); owner.current = null
@@ -120,6 +121,17 @@ export default function App() {
     }
     clearAnswer()
   }
+  function cancel() {
+    const current = roundRef.current
+    if (current.phase !== 'playing' || !owner.current || claiming.current) return
+    // A failed save is still the same pending answer. Keep its retry UI and
+    // ownership; never abandon it or pretend cancellation saved the answer.
+    if (pending.current) return
+    try { cancelRound(current.roundId) }
+    catch { setError('This round could not be canceled safely. Allow site storage, then press Escape again. Existing data has been kept.'); return }
+    clock.current.setActive(false); owner.current(); owner.current = null
+    transition({phase:'ready'}); clearAnswer(); setError(''); setWarnings(loadStorageWarnings())
+  }
   function submit() {
     const current = roundRef.current
     if (current.phase !== 'playing' || !owner.current || claiming.current || pending.current || !armed.current) return
@@ -156,7 +168,15 @@ export default function App() {
   }, [practice, round.phase, round.phase === 'playing' ? round.questionIndex : -1, savingFailed])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!practiceRef.current || event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.key !== 'Enter') return
+      if (!practiceRef.current || event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+      if (event.key === 'Escape') {
+        if (roundRef.current.phase !== 'playing' || (event.target !== input.current && event.target !== document.body)) return
+        const popup = [...document.querySelectorAll('dialog[open], [role="dialog"], [role="menu"], [role="listbox"], [popover]:popover-open')]
+          .some(element => element.getClientRects().length > 0)
+        if (popup) return
+        event.preventDefault(); cancel(); return
+      }
+      if (event.key !== 'Enter') return
       if (roundRef.current.phase === 'playing') {
         if (event.target !== input.current) return
         event.preventDefault(); submit()

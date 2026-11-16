@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
-import { appendAttempt, loadAttempts, loadStorageWarnings } from './storage'
+import { appendAttempt, cancelRound, CANCELLATION_PREFIX, loadAttempts, loadCanceledRounds, loadStorageWarnings } from './storage'
+import { restoreRound } from './game'
 import { aggregateStatistics } from './statistics'
 const memory = new Map<string, string>()
 const storage = { get length() { return memory.size }, key: (i: number) => [...memory.keys()][i] ?? null, getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value) } }
@@ -33,7 +34,30 @@ test('ambiguous equal-time corrections never manufacture first-try success or re
   expect([...memory.entries()]).toEqual(before)
   expect(loadAttempts().find(a => a.id === wrong.id)).toEqual(wrong)
 })
+test('cancellation is additive, verified and idempotent; unknown lifecycle fields survive', () => {
+  appendAttempt(record)
+  const eventBytes = memory.get('arithmetic:attempt:v1:'+record.id)
+  cancelRound(record.roundId)
+  const key = CANCELLATION_PREFIX + record.roundId
+  const bytes = JSON.stringify({...JSON.parse(memory.get(key)!), extra:{retained:true}})
+  memory.set(key, bytes)
+  cancelRound(record.roundId)
+  expect(memory.get(key)).toBe(bytes)
+  expect(memory.get('arithmetic:attempt:v1:'+record.id)).toBe(eventBytes)
+  expect(restoreRound(loadAttempts(), loadCanceledRounds())).toEqual({phase:'ready'})
+  expect(aggregateStatistics(loadAttempts()).summary).toMatchObject({questions:1, errors:1, completedRounds:0})
+})
+test('unsupported lifecycle bytes warn, remain exact, and cannot resurrect their round', () => {
+  appendAttempt(record)
+  const key = CANCELLATION_PREFIX + record.roundId
+  memory.set(key, '{')
+  expect(() => cancelRound(record.roundId)).toThrow()
+  expect(memory.get(key)).toBe('{')
+  expect(loadStorageWarnings().some(w => w.includes('lifecycle'))).toBe(true)
+  expect(restoreRound(loadAttempts(), loadCanceledRounds())).toEqual({phase:'ready'})
+})
 test('silent failed write is rejected by readback', () => {
   Object.defineProperty(globalThis, 'localStorage', {value:{...storage, setItem:()=>{}}, configurable:true})
   expect(() => appendAttempt(record)).toThrow('verify')
+  expect(() => cancelRound(record.roundId)).toThrow('verify')
 })

@@ -1,0 +1,103 @@
+import { expect, test, type Page } from '@playwright/test'
+async function attempts(page: Page) { return page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(k => k.startsWith('arithmetic:attempt:')).map(k => [k,localStorage.getItem(k)]))) }
+
+test('Escape cancels only active Practice, preserves attempts, and never resumes the canceled round', async ({page,context}) => {
+  await page.goto('/'); await page.keyboard.press('Escape')
+  await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  await page.keyboard.press('Enter')
+  const input = page.getByRole('textbox',{name:'Answer'})
+  await input.fill('0'); await input.press('Enter')
+  const before = await attempts(page)
+  const roundId = JSON.parse(Object.values(before)[0]!).roundId
+  await input.fill('123')
+  await page.getByRole('link',{name:'Stats',exact:true}).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('link',{name:'Practice',exact:true}).click()
+  await expect(input).toHaveValue('123')
+  await input.press('Escape')
+  await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  expect(await attempts(page)).toEqual(before)
+  await page.reload(); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  const other = await context.newPage(); await other.goto('/')
+  await expect(other.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  await other.close()
+  await page.getByRole('link',{name:'Stats',exact:true}).click()
+  await expect(page.locator('.stats-summary > div').last().locator('dd')).toHaveText('0')
+  await page.getByRole('link',{name:'Practice',exact:true}).click()
+  await page.keyboard.press('Enter'); await input.fill('0'); await input.press('Enter')
+  const after = await attempts(page)
+  expect(Object.keys(after)).toHaveLength(2)
+  expect(Object.values(after).map(bytes => JSON.parse(bytes!).roundId).some(id => id !== roundId)).toBe(true)
+})
+
+test('Escape ignores repeats, composition, modifiers, unrelated controls and open popups', async ({page}) => {
+  await page.goto('/'); await page.keyboard.press('Enter')
+  const input = page.getByRole('textbox',{name:'Answer'})
+  for (const options of [{repeat:true},{isComposing:true},{keyCode:229},{ctrlKey:true},{altKey:true},{metaKey:true},{shiftKey:true}]) {
+    await input.evaluate((e,options) => e.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true,...options})),options)
+    await expect(input).toBeVisible()
+  }
+  await page.getByRole('button',{name:'Switch to light theme'}).press('Escape')
+  await expect(input).toBeVisible()
+  await page.evaluate(() => { const popup=document.createElement('div'); popup.setAttribute('role','dialog'); popup.textContent='Dialog'; document.body.append(popup) })
+  await input.press('Escape'); await expect(input).toBeVisible()
+  await page.locator('[role="dialog"]').evaluate(e => e.remove())
+  await input.press('Escape'); await expect(input).toHaveCount(0)
+})
+
+test('failed answer saving remains visible and retains its exact pending event through Escape', async ({page}) => {
+  await page.goto('/'); await page.keyboard.press('Enter')
+  const input = page.getByRole('textbox',{name:'Answer'})
+  await input.fill('0')
+  await page.evaluate(() => { (window as any).originalSet=Storage.prototype.setItem; (window as any).writes=[]; Storage.prototype.setItem=function(k,v) { (window as any).writes.push([k,v]); throw new DOMException('Full','QuotaExceededError') } })
+  await input.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button',{name:'Retry saving'})).toBeVisible()
+  await expect(input).toBeDisabled(); expect(await attempts(page)).toEqual({})
+  const attempted = await page.evaluate(() => (window as any).writes[0])
+  await page.evaluate(() => { Storage.prototype.setItem=(window as any).originalSet })
+  await page.getByRole('button',{name:'Retry saving'}).click()
+  expect(await page.evaluate(k => localStorage.getItem(k),attempted[0])).toBe(attempted[1])
+  await input.press('Escape'); await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  expect(Object.keys(await attempts(page))).toHaveLength(1)
+})
+
+test('Escape cannot cancel a finished round or create an empty submission', async ({page}) => {
+  await page.goto('/'); await page.keyboard.press('Enter')
+  const input = page.getByRole('textbox',{name:'Answer'})
+  for (let i=0;i<10;i++) {
+    const [a,b]=(await page.getByTestId('question').innerText()).match(/\d+/g)!.map(Number)
+    await input.fill(String(a*b)); await input.press('Enter')
+  }
+  const before=await attempts(page)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('heading',{name:'Round complete'})).toBeVisible()
+  expect(await attempts(page)).toEqual(before)
+})
+
+test('canceling an unsubmitted new round does not reload an older unfinished round', async ({page,context}) => {
+  await page.goto('/'); await page.keyboard.press('Enter')
+  await page.getByRole('textbox',{name:'Answer'}).fill('0'); await page.keyboard.press('Enter')
+  const before = await attempts(page)
+  const other = await context.newPage(); await other.goto('/')
+  await other.getByRole('button',{name:'Start',exact:true}).click()
+  await other.getByRole('textbox',{name:'Answer'}).press('Escape')
+  await page.close(); await other.reload()
+  await expect(other.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  expect(await attempts(other)).toEqual(before)
+})
+
+test('failed cancellation keeps the active question and retries without rewriting attempts', async ({page}) => {
+  await page.goto('/'); await page.keyboard.press('Enter')
+  const input = page.getByRole('textbox',{name:'Answer'})
+  await input.fill('0'); await input.press('Enter')
+  const before = await attempts(page)
+  await page.evaluate(() => { (window as any).originalSet=Storage.prototype.setItem; Storage.prototype.setItem = () => { throw new DOMException('Full','QuotaExceededError') } })
+  await input.press('Escape')
+  await expect(page.getByRole('alert')).toContainText('could not be canceled safely')
+  await expect(input).toBeVisible(); expect(await attempts(page)).toEqual(before)
+  await page.evaluate(() => { Storage.prototype.setItem=(window as any).originalSet })
+  await input.press('Escape'); await page.reload()
+  await expect(page.getByRole('button',{name:'Start',exact:true})).toBeVisible()
+  expect(await attempts(page)).toEqual(before)
+})
