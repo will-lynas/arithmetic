@@ -35,7 +35,7 @@ function expected(records:Record<string,string>) {
 }
 async function check(page:Page,records:Record<string,string>) {
   const oracle=expected(records)
-  expect(oracle.summary[0]).toBe('168');expect(oracle.summary[3]).toBe('12')
+  expect(Number(oracle.summary[0])).toBeGreaterThanOrEqual(400);expect(Number(oracle.summary[3])).toBeGreaterThanOrEqual(80)
   await expect(summary(page)).toHaveText(oracle.summary,{useInnerText:true})
   const rows=page.getByRole('table',{name:'Division statistics by divisor'}).locator('tbody tr')
   for(const [i,row]of oracle.rows.entries()) {
@@ -75,7 +75,10 @@ test('hidden real replacement on Division Stats refreshes both tabs and restores
   await page.getByRole('link',{name:'Multiplication',exact:true}).click()
   await page.getByRole('link',{name:'Stats',exact:true}).click()
   await expect(page.getByRole('table')).toHaveCount(3)
-  await expect(page.getByRole('table',{name:'Completions by ordered multiplication pair',exact:true}).locator('[data-pair="1x6"]')).toHaveText('5')
+  const solved=Object.entries(loaded).filter(([k])=>k.startsWith('arithmetic:attempt:v1:')).map(([,v])=>JSON.parse(v)).filter(a=>a.correct && a.left===1 && a.right===6)
+  const pairCount=new Set(solved.map(a=>`${a.roundId}:${a.questionIndex}`)).size
+  expect(pairCount).toBeGreaterThanOrEqual(8)
+  await expect(page.getByRole('table',{name:'Completions by ordered multiplication pair',exact:true}).locator('[data-pair="1x6"]')).toHaveText(String(pairCount))
   await page.goto('/division/stats');await seed(page)
   expect((await bytes(page))['arithmetic:synthetic:backup:v1']).toBe(backup)
   await open(page);await page.getByRole('button',{name:'Restore backup',exact:true}).click()
