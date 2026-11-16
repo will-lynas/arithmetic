@@ -2,7 +2,7 @@
 
 Press **Ctrl+Alt+Shift+S** to open the hidden dialog. Nothing is changed until a replacement, restore or recovery is explicitly confirmed. There is no default visible entry point or URL trigger. The shortcut uses physical `KeyS`, ignores repeats/composition and unrelated text fields, and works from ordinary practice inputs. Cancel is initially focused; Escape dismisses.
 
-The loader replaces both games' real browser-local records with deterministic invented events, relative to load time. Normal practice, sampling and all three multiplication Stats grids use those records. Division includes five-question and historical ten-question plans. No separate aggregate/demo rendering path is used.
+The loader replaces both games' real browser-local records with deterministic invented events, relative to load time. Normal practice, sampling and all three multiplication Stats grids use those records. The default history has over 2,000 multiplication presentations across all 144 ordered pairs, irregular counts, hundreds of completed ten-question rounds and a few canceled partials. Facts involving 9 are slower even on clean answers; facts involving 12 have more first-attempt errors, with independent noisy outcomes and positively skewed times. Division has hundreds of questions in five-question and historical ten-question plans. Sparse/zero/extreme cases live in test fixtures, not the default demo. No separate aggregate/demo rendering path is used. Existing saved data is never automatically reseeded: rerun the confirmed load deliberately to use the new history.
 
 ## Scope and recovery
 

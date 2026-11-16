@@ -1,9 +1,13 @@
 /* Palette, typography and navigation adapted from times-tables (MIT). */
 * { box-sizing: border-box; }
-:root { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-synthesis: none; }
+:root { --color-background: #323437; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-synthesis: none; }
+/* The mounted page remains the theme authority, including storage-recovery UI.
+   Paint the browser canvas too, without disabling native elastic scrolling. */
+:root:has(#root > .app.light) { --color-background: #e1e3e0; }
+html, body, #root { background: var(--color-background); }
 body { margin: 0; }
-.app { --color-background: #323437; --panel: #2c2e31; --muted: #a3a4a0; --text: #d1d0c5; --accent: #e2b714; --invalid: #ed8796; --line: #57595b; min-height: 100vh; background: var(--color-background); color: var(--text); font-variant-numeric: tabular-nums; }
-.app.light { --color-background: #e1e3e0; --panel: #d2d6d1; --muted: #596158; --text: #323437; --accent: #846300; --invalid: #ac3535; --line: #aab2a9; }
+.app { --panel: #2c2e31; --muted: #a3a4a0; --text: #d1d0c5; --accent: #e2b714; --invalid: #ed8796; --line: #57595b; min-height: 100vh; background: var(--color-background); color: var(--text); font-variant-numeric: tabular-nums; }
+.app.light { --panel: #d2d6d1; --muted: #596158; --text: #323437; --accent: #846300; --invalid: #ac3535; --line: #aab2a9; }
 .shell { max-width: 1040px; width: calc(100% - 96px); margin: 0 auto; padding: 24px 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; }
 .page-nav { display: flex; align-items: center; gap: 24px; font-size: 13px; }
