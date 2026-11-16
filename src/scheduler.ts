@@ -3,7 +3,7 @@ import { isAttempt } from './storage'
 import type { AttemptRecord } from './types'
 
 // Evidence-informed, NOT the published ARTS selector: ARTS uses max priority.
-// Our 50/50 coverage/difficulty mix and every numeric tuning below are custom.
+// Our weighted random selector and every numeric tuning below are custom.
 // https://files.eric.ed.gov/fulltext/ED549436.pdf (methods pp. 2533–2534).
 const HISTORY = 256
 const FACT_HISTORY = 8
@@ -11,9 +11,11 @@ const CLEAN_GATE = 12
 const BASELINE_WINDOW = 64
 const ERROR_BOOST = 12
 const SPEED_BOOST = 2
-const DRAW_FLOOR = 0.05 // Tiny/noisy/stale signals must not own half the draws.
+const DRAW_FLOOR = 1 // Keep mature facts reachable without amplifying tiny signals.
 const COVERAGE_TARGET = 3
-const COVERAGE_STEP = 16 // One missing completion outweighs max error (12) + speed (2).
+const COVERAGE_DECAY = 64
+export const COVERAGE_BOOSTS = Array.from({length:COVERAGE_TARGET + 1}, (_,completed) =>
+  completed < COVERAGE_TARGET ? 12 * COVERAGE_DECAY ** (2 - completed) : 0)
 const DAY = 86_400_000
 const pair = (left: number, right: number) => `${left}x${right}`
 const median = (values: number[]) => {
@@ -67,7 +69,7 @@ export function questionWeights(attempts: readonly AttemptRecord[], now = Date.n
     // Typed-submit latency is NOT response onset, nor a failure/mastery label.
     const slow = baseline !== null && times.length
       ? Math.min(1, Math.max(0, (median(times) - baseline) / Math.log(4))) * times.length / (times.length + 2) : 0
-    const coverageBoost = COVERAGE_STEP * (COVERAGE_TARGET - (completed.get(pair(left,right)) ?? 0))
+    const coverageBoost = COVERAGE_BOOSTS[completed.get(pair(left,right)) ?? 0]!
     const difficultyWeight = ERROR_BOOST * error + SPEED_BOOST * slow
     return {left, right, weight:coverageBoost + difficultyWeight, coverageBoost, difficultyWeight}
   })
@@ -84,8 +86,6 @@ export function sampleQuestion(attempts: readonly AttemptRecord[], random: () =>
   // At most ten slots and four cooled pairs: the 144-fact pool cannot exhaust.
   const choices = questionWeights(attempts, now, roundId).filter(q =>
     !cooling.has(pair(q.left,q.right)) && (counts.get(pair(q.left,q.right)) ?? 0) < 2)
-  // Equal scores are uniform in either component; retain the single-draw path.
-  if (choices.every(q => q.weight === choices[0]!.weight) || random() < 0.5) return choices[Math.floor(random() * choices.length)]!
   const total = choices.reduce((sum, q) => sum + DRAW_FLOOR + q.weight, 0)
   let target = random() * total
   return choices.find(q => (target -= DRAW_FLOOR + q.weight) < 0) ?? choices.at(-1)!
