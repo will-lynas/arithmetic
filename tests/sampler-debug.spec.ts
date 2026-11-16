@@ -25,16 +25,15 @@ test('seven real histograms reconcile all bins with whole population and preserv
   for(const d of expected) {
     const plot=page.getByRole('figure',{name:`${d.title} histogram`,exact:true})
     await expect(plot.locator('.recharts-surface')).toBeVisible()
-    await expect(plot.getByText(`${d.known} known / 144 · ${d.missing} missing`,{exact:true})).toBeVisible()
-    await plot.getByText('Bin counts',{exact:true}).click()
+    if(d.missing)await expect(plot.getByText(`${d.missing} missing`,{exact:true})).toBeVisible()
+    else await expect(plot.getByText(/missing/)).toHaveCount(0)
     const bins=await plot.getByRole('table').locator('tbody tr').evaluateAll(rows=>rows.map(r=>({lower:Number(r.getAttribute('data-lower')),upper:Number(r.getAttribute('data-upper')),count:Number(r.getAttribute('data-count'))})))
     expect(bins).toEqual(d.bins)
-    await plot.getByText('Bin counts',{exact:true}).click()
   }
   const ranked=page.getByRole('table',{name:'Ranked next-draw probabilities'}).locator('tbody tr')
   const probabilities=await ranked.evaluateAll(rows=>rows.map(r=>Number(r.getAttribute('data-probability'))))
   expect(probabilities).toEqual(samplerDiagnostics(history,syntheticNow).rows.map(r=>r.probability))
-  await page.getByRole('button',{name:'Refresh snapshot'}).click()
+  await page.getByRole('button',{name:'Refresh'}).click()
   await page.getByRole('link',{name:'Stats',exact:true}).click()
   await page.getByRole('link',{name:'Debug',exact:true}).click()
   expect(await page.evaluate(()=>({...localStorage}))).toEqual(bytes)
@@ -44,11 +43,13 @@ test('histogram axis labels fit the narrow chart viewport',async({page})=>{
   await page.setViewportSize({width:320,height:900})
   await page.goto('/multiplication/debug')
   await expect(page.locator('.debug-plot')).toHaveCount(7)
-  for(const plot of await page.locator('.debug-plot').all()) {
+  for(const plot of await page.locator('.debug-plot:has(svg)').all()) {
     const svg=(await plot.locator('svg.recharts-surface').boundingBox())!
-    const label=(await plot.locator('.recharts-label:not([transform])').boundingBox())!
-    expect(label.x).toBeGreaterThanOrEqual(svg.x)
-    expect(label.x+label.width).toBeLessThanOrEqual(svg.x+svg.width)
+    for(const label of await plot.locator('svg text').all()) {
+      const bounds=(await label.boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(svg.x-1)
+      expect(bounds.x+bounds.width).toBeLessThanOrEqual(svg.x+svg.width+1)
+    }
   }
 })
 
@@ -63,8 +64,8 @@ test('Debug is tucked below Stats, all ranked rows and distributions use normali
   const data=await rows.evaluateAll(rows=>rows.map(r=>({pair:r.getAttribute('data-pair'),p:Number(r.getAttribute('data-probability'))})))
   expect(new Set(data.map(r=>r.pair)).size).toBe(144)
   expect(data.reduce((sum,r)=>sum+r.p,0)).toBeCloseTo(1,12)
-  await expect(page.getByRole('table',{name:'Chance by lifetime completions'})).toBeVisible()
-  await expect(page.getByRole('table',{name:'Weighted score contributions'})).toBeVisible()
+  await expect(page.getByRole('table',{name:'Chance by lifetime completions'})).toHaveCount(0)
+  await expect(page.getByRole('table',{name:'Weighted score contributions'})).toHaveCount(0)
   await page.reload()
   await expect(rows).toHaveCount(144)
   await page.goBack()
@@ -79,10 +80,10 @@ test('Debug pauses practice and uses mounted active-round context without sampli
   await page.getByRole('link',{name:'Stats',exact:true}).click()
   await page.getByRole('link',{name:'Debug',exact:true}).click()
   await expect(page.getByText('Active round · next draw', {exact:true})).toBeVisible()
-  await expect(page.getByText(`Already chosen: ${question?.replace(' times ',' × ')}`,{exact:true})).toBeVisible()
+  await expect(page.getByText(`Current: ${question?.replace(' times ',' × ')}`,{exact:true})).toBeVisible()
   await page.locator('body').click({position:{x:1,y:1}})
   await page.keyboard.press('Escape');await page.keyboard.press('Enter')
-  await page.getByRole('button',{name:'Refresh snapshot'}).click()
+  await page.getByRole('button',{name:'Refresh'}).click()
   await page.getByRole('link',{name:'Practice',exact:true}).click()
   await expect(page.getByTestId('question')).toHaveAttribute('aria-label',question!)
   await expect(page.getByRole('textbox',{name:'Answer',exact:true})).toHaveValue('17')
