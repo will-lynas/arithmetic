@@ -50,8 +50,9 @@ export default function App() {
       }
       owner.current = release
       // Refresh inside ownership: another owner may have finished before release.
+      const saved = restoring ? loadAttempts() : []
       const next = restoring && candidate.phase !== 'ready'
-        ? restoreRound(loadAttempts().filter(a => a.roundId === candidate.roundId), loadCanceledRounds()) : candidate
+        ? restoreRound(saved.filter(a => a.roundId === candidate.roundId), loadCanceledRounds(), saved) : candidate
       transition(next)
       if (next.phase !== 'ready') {
         // Per-tab reload hint only; attempts remain the immutable authority.
@@ -71,7 +72,8 @@ export default function App() {
   }
   function start() {
     if (!practiceRef.current || claiming.current || roundRef.current.phase === 'playing' || pending.current) return
-    void claim({phase:'playing', roundId:crypto.randomUUID(), questionIndex:0, ...randomQuestion(), elapsedMs:0})
+    const roundId = crypto.randomUUID()
+    void claim({phase:'playing', roundId, questionIndex:0, ...randomQuestion(undefined, loadAttempts(), roundId), elapsedMs:0})
   }
   useEffect(() => {
     const saved = loadAttempts()
@@ -82,7 +84,7 @@ export default function App() {
       if (loadCanceledRounds().has(roundId ?? '')) preferred = []
       else if (matching.length) preferred = matching
     } catch { /* Fall back to the existing ledger, never overwrite it. */ }
-    void claim(restoreRound(preferred, loadCanceledRounds()), true)
+    void claim(restoreRound(preferred, loadCanceledRounds(), saved), true)
     const release = () => {
       generation.current++; claiming.current = true
       clock.current.setActive(false); owner.current?.(); owner.current = null
@@ -103,7 +105,8 @@ export default function App() {
       return
     }
     pending.current = null; setSavingFailed(false); setError('')
-    setAttempts(loadAttempts()); setWarnings(loadStorageWarnings())
+    const saved = loadAttempts()
+    setAttempts(saved); setWarnings(loadStorageWarnings())
     const current = roundRef.current
     if (current.phase !== 'playing') return
     if (!record.correct) {
@@ -116,7 +119,7 @@ export default function App() {
       transition({phase:'finished', roundId:current.roundId}); owner.current?.(); owner.current = null
     }
     else {
-      transition({...current, questionIndex: current.questionIndex + 1, ...randomQuestion(), elapsedMs: 0})
+      transition({...current, questionIndex: current.questionIndex + 1, ...randomQuestion(undefined, saved, current.roundId), elapsedMs: 0})
       clock.current = new ActiveClock(); syncClock()
     }
     clearAnswer()

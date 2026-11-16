@@ -9,9 +9,10 @@ test('question time is monotonic active time, cumulative across retries and paus
   expect(clock.elapsed()).toBe(320)
   clock.setActive(true); now += 200; expect(clock.elapsed()).toBe(520)
 })
-test('operands are sampled independently over the full inclusive range', () => {
-  const samples = [0, 0.999999, 0.5, 0]
-  expect(randomQuestion(() => samples.shift()!)).toEqual({left: 1, right: 12})
+test('all ordered pairs have a uniform full-range draw without history', () => {
+  const samples = [0, 0.999999, 0.5]
+  expect(randomQuestion(() => samples.shift()!)).toEqual({left: 1, right: 1})
+  expect(randomQuestion(() => samples.shift()!)).toEqual({left: 12, right: 12})
   expect(randomQuestion(() => samples.shift()!)).toEqual({left: 7, right: 1})
 })
 test('only explicit safe integers are submissions', () => {

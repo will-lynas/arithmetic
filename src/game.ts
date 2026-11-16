@@ -1,5 +1,6 @@
 import type { AttemptRecord } from './types'
 import { groupQuestions } from './questions'
+import { sampleQuestion } from './scheduler'
 export class ActiveClock {
   private accumulated: number
   private since: number | null = null
@@ -10,14 +11,17 @@ export class ActiveClock {
   }
   elapsed() { return this.accumulated + (this.since === null ? 0 : Math.max(0, this.now() - this.since)) }
 }
-export function randomQuestion(random = Math.random) { return { left: Math.floor(random() * 12) + 1, right: Math.floor(random() * 12) + 1 } }
+export function randomQuestion(random = Math.random, attempts: readonly AttemptRecord[] = [], roundId?: string, now = Date.now()) {
+  const {left, right} = sampleQuestion(attempts, random, now, roundId)
+  return {left, right}
+}
 export function parseAnswer(text: string): number | null {
   if (!/^-?\d+$/.test(text.trim())) return null
   const answer = Number(text)
   return Number.isSafeInteger(answer) ? answer : null
 }
 export type Round = {phase: 'ready'} | {phase: 'playing'; roundId: string; questionIndex: number; left: number; right: number; elapsedMs: number} | {phase: 'finished'; roundId: string}
-export function restoreRound(attempts: AttemptRecord[], canceledRounds: ReadonlySet<string> = new Set()): Round {
+export function restoreRound(attempts: AttemptRecord[], canceledRounds: ReadonlySet<string> = new Set(), history: readonly AttemptRecord[] = attempts, random = Math.random): Round {
   const last = attempts.at(-1)
   if (!last || canceledRounds.has(last.roundId)) return { phase: 'ready' }
   const round = attempts.filter(a => a.roundId === last.roundId)
@@ -30,7 +34,7 @@ export function restoreRound(attempts: AttemptRecord[], canceledRounds: Readonly
   const latest = question.at(-1)!
   if (question.some(a => a.correct)) {
     return index === 9 ? {phase: 'finished', roundId: last.roundId}
-      : {phase: 'playing', roundId: last.roundId, questionIndex: index + 1, ...randomQuestion(), elapsedMs: 0}
+      : {phase: 'playing', roundId: last.roundId, questionIndex: index + 1, ...randomQuestion(random, history, last.roundId), elapsedMs: 0}
   }
   return {phase: 'playing', roundId: last.roundId, questionIndex: index, left: latest.left, right: latest.right, elapsedMs: Math.max(...question.map(a => a.elapsedMs))}
 }
