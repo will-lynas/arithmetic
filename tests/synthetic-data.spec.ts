@@ -89,8 +89,18 @@ test('legacy round locks refuse replacement with a close/reload warning',async({
 test('starting claims and later synthetic practice also block restore',async({page,context})=>{
   await page.goto('/multiplication/stats');await load(page);await page.getByRole('button',{name:'Cancel',exact:true}).click()
   const other=await context.newPage();await other.goto('/division')
-  await other.evaluate(()=>{const request=navigator.locks.request.bind(navigator.locks);navigator.locks.request=((...args:any[])=>String(args[0]).startsWith('arithmetic:round:')?new Promise(resolve=>{(window as any).releaseClaim=()=>resolve((request as any)(...args))}):(request as any)(...args))as any})
-  await other.getByRole('button',{name:'Start',exact:true}).click();await expect(other.getByRole('textbox',{name:'Starting quotient',exact:true})).toBeFocused()
+  await other.evaluate(()=>{
+    const w=window as any,manager=navigator.locks,request=manager.request.bind(manager)
+    w.lockCalls=[];w.lockManager=manager
+    manager.request=((...args:any[])=>{
+      w.lockCalls.push(String(args[0]))
+      if(String(args[0]).startsWith('arithmetic:round:'))return new Promise(resolve=>{w.releaseClaim=()=>resolve((request as any)(...args))})
+      return (request as any)(...args)
+    })as any
+  })
+  await other.getByRole('button',{name:'Start',exact:true}).click()
+  await expect.poll(()=>other.evaluate(()=>(window as any).lockCalls)).toHaveLength(2)
+  await expect(other.getByRole('textbox',{name:'Starting quotient',exact:true})).toBeFocused()
   await expect.poll(()=>other.evaluate(()=>typeof (window as any).releaseClaim)).toBe('function')
   const before=await allBytes(page)
   await open(page);await page.getByRole('button',{name:'Restore backup',exact:true}).click();await page.getByRole('button',{name:'Restore original backup',exact:true}).click()
