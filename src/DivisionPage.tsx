@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ActiveClock, parseAnswer } from './game'
 import { acquireRound } from './ownership'
 import { appendDivisionEvent, divisionQuestion, DIVISION_ROUND_LENGTH, loadDivisionEvents, type DivisionAttempt, type DivisionEvent, type DivisionStart } from './division'
@@ -14,6 +15,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
   const [error,setError] = useState('')
   const [warnings,setWarnings] = useState<string[]>([])
   const [available,setAvailable] = useState(false)
+  const [preparing,setPreparing] = useState(false)
   const [failed,setFailed] = useState(false)
   const [attempts,setAttempts] = useState<DivisionAttempt[]>([])
   const inputs = [useRef<HTMLInputElement>(null),useRef<HTMLInputElement>(null)]
@@ -71,6 +73,10 @@ export function DivisionPage({visible}:{visible:boolean}) {
     if(!visibleRef.current || claiming.current || pending.current || (current.current && !current.current.finished)) return
     const token=++generation.current
     claiming.current=true;setAvailable(false)
+    // Preserve the tap's focus activation without making a question playable
+    // before its exclusive ownership and immutable start have been verified.
+    flushSync(()=>setPreparing(true))
+    inputs[0].current?.focus()
     const roundId=crypto.randomUUID()
     const event:DivisionStart={version:1,kind:'start',id:crypto.randomUUID(),roundId,submittedAt:new Date().toISOString(),questions:Array.from({length:DIVISION_ROUND_LENGTH},()=>divisionQuestion())}
     try {
@@ -79,7 +85,7 @@ export function DivisionPage({visible}:{visible:boolean}) {
       if(!release) throw new Error('Round in use')
       owner.current=release;commit(event)
     } catch {setError('Safe round ownership is unavailable. Use a browser with Web Locks before answering. Existing data has been kept.')}
-    finally {if(token===generation.current){claiming.current=false;setAvailable(true)}}
+    finally {if(token===generation.current){claiming.current=false;setAvailable(true);setPreparing(false)}}
   }
   function submit() {
     const state=current.current
@@ -153,16 +159,20 @@ export function DivisionPage({visible}:{visible:boolean}) {
   return <main aria-label="Division" hidden={!visible}>
     {warnings.map(w=><p className="storage-warning" role="alert" key={w}>{w}</p>)}
     {error && <div className="storage-warning" role="alert">{error}{failed && <button className="retry-save" onClick={()=>{if(pending.current)commit(pending.current)}}>Retry saving</button>}</div>}
-    {!round && <section className="ready stage" aria-label="Ready"><p className="progress">{DIVISION_ROUND_LENGTH} questions</p><button ref={action} className="primary" disabled={!available || failed} onClick={()=>void start()}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
-    {question && <section className="stage" aria-label="Division practice">
-      <p className="progress" aria-label="Question progress">{round!.index+1} / {plannedLength}</p>
+    {!round && !preparing && <section className="ready stage" aria-label="Ready"><p className="progress">{DIVISION_ROUND_LENGTH} questions</p><button ref={action} className="primary" disabled={!available || failed} onClick={()=>void start()}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
+    {(question || preparing) && <section className="stage" aria-label="Division practice" aria-busy={preparing}>
+      <p className="progress" aria-label="Question progress">{preparing?'Starting…':`${round!.index+1} / ${plannedLength}`}</p>
       <div className="equation division-equation" data-invalid={wrong.some(Boolean)}>
-        <span className="question" data-testid="division-question" aria-label={`${question.dividend} divided by ${question.divisor}`}>{question.dividend} <span className="operator">÷</span> {question.divisor}</span><span className="operator equals" aria-hidden="true">=</span>
-        <div className="division-answers">{['Quotient','Remainder'].map((label,index)=><label className="division-field" key={label}><input ref={inputs[index]} aria-label={label} aria-invalid={wrong[index]} aria-describedby="division-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" type="text" value={values[index]} disabled={failed} onChange={e=>{const next=[...valuesRef.current];next[index]=e.target.value;valuesRef.current=next;setValues(next);setWrong([false,false]);setFeedback('');armed.current=true}}/><span>{label.toLowerCase()}</span></label>)}</div>
+        <span className="question" data-testid={question?'division-question':undefined} aria-label={question?`${question.dividend} divided by ${question.divisor}`:undefined}>{question?<>{question.dividend} <span className="operator">÷</span> {question.divisor}</>:'…'}</span><span className="operator equals" aria-hidden="true">=</span>
+        <div className="division-answers">{['Quotient','Remainder'].map((label,index)=><label className="division-field" key={label}><input ref={inputs[index]} aria-label={preparing?`Starting ${label.toLowerCase()}`:label} aria-invalid={wrong[index]} aria-describedby="division-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={values[index]} aria-disabled={preparing} disabled={failed} onBeforeInput={e=>{if(claiming.current)e.preventDefault()}} onChange={e=>{if(claiming.current || !owner.current)return;const next=[...valuesRef.current];next[index]=e.target.value;valuesRef.current=next;setValues(next);setWrong([false,false]);setFeedback('');armed.current=true}}/><span>{label.toLowerCase()}</span></label>)}</div>
       </div>
       <p id="division-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
+      <div className="practice-actions">
+        <button className="submit-answer" type="button" disabled={preparing || failed} onPointerDown={e=>e.preventDefault()} onClick={submit}>Submit</button>
+        <button className="cancel-round" type="button" disabled={preparing || failed} onPointerDown={e=>e.preventDefault()} onClick={cancel}>Cancel</button>
+      </div>
       <p className="shortcut"><kbd>enter</kbd> submit <span className="key-gap"><kbd>tab</kbd> / <kbd>space</kbd> switch</span> <span className="key-gap"><kbd>esc</kbd> cancel</span></p>
     </section>}
-    {round?.finished && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / {plannedLength}</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+    {round?.finished && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / {plannedLength}</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
   </main>
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ActiveClock, parseAnswer, randomQuestion, restoreRound, type Round } from './game'
 import { appendAttempt, cancelRound, loadAttempts, loadCanceledRounds, loadStorageWarnings } from './storage'
 import type { AttemptRecord } from './types'
@@ -29,6 +30,7 @@ export default function App() {
   const claiming = useRef(true)
   const generation = useRef(0)
   const [available, setAvailable] = useState(false)
+  const [preparing, setPreparing] = useState(false)
   const roundRef = useRef(round)
   const clock = useRef(new ActiveClock(undefined, round.phase === 'playing' ? round.elapsedMs : 0))
   const [path, setPath] = useState(resolvePath)
@@ -81,12 +83,16 @@ export default function App() {
     } catch {
       setError('Safe round ownership is unavailable. Use a browser with Web Locks before answering. Existing data has been kept.')
     } finally {
-      if (token === generation.current) { claiming.current = false; setAvailable(true) }
+      if (token === generation.current) { claiming.current = false; setAvailable(true); setPreparing(false) }
     }
   }
   function start() {
     if (!practiceRef.current || claiming.current || roundRef.current.phase === 'playing' || pending.current) return
     const roundId = crypto.randomUUID()
+    // Mount and focus in the tap's activation, before awaiting Web Locks. The
+    // input rejects edits and no question is playable until ownership.
+    flushSync(() => setPreparing(true))
+    input.current?.focus()
     void claim({phase:'playing', roundId, questionIndex:0, ...randomQuestion(undefined, loadAttempts(), roundId), elapsedMs:0})
   }
   useEffect(() => {
@@ -145,7 +151,7 @@ export default function App() {
     // ownership; never abandon it or pretend cancellation saved the answer.
     if (pending.current) return
     try { cancelRound(current.roundId) }
-    catch { setError('This round could not be canceled safely. Allow site storage, then press Escape again. Existing data has been kept.'); return }
+    catch { setError('This round could not be canceled safely. Allow site storage, then try canceling again. Existing data has been kept.'); return }
     clock.current.setActive(false); owner.current(); owner.current = null
     transition({phase:'ready'}); clearAnswer(); setError(''); setWarnings(loadStorageWarnings())
   }
@@ -183,7 +189,7 @@ export default function App() {
     if (!practice) return
     if (round.phase === 'playing' && !savingFailed) input.current?.focus()
     else action.current?.focus()
-  }, [practice, round.phase, round.phase === 'playing' ? round.questionIndex : -1, savingFailed])
+  }, [practice, preparing, round.phase, round.phase === 'playing' ? round.questionIndex : -1, savingFailed])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!practiceRef.current || event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
@@ -236,17 +242,21 @@ export default function App() {
       {error && <div className="storage-warning" role="alert">{error}{savingFailed && <button className="retry-save" onClick={() => { if (pending.current) commit(pending.current) }}>Retry saving</button>}</div>}
       </div>
       <main className="practice-page" hidden={!practice}>
-        {round.phase === 'ready' && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available} onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
-        {round.phase === 'playing' && <section className="stage" aria-label="Multiplication practice">
-          <p className="progress" aria-label="Question progress">{round.questionIndex + 1} / 10</p>
+        {round.phase === 'ready' && !preparing && <section className="ready stage" aria-label="Ready"><p className="progress">10 questions</p><button ref={action} className="primary" disabled={!available} onClick={start}>Start</button><p className="shortcut"><kbd>enter</kbd> start</p></section>}
+        {(round.phase === 'playing' || preparing) && <section className="stage" aria-label="Multiplication practice" aria-busy={preparing}>
+          <p className="progress" aria-label="Question progress">{round.phase === 'playing' ? `${round.questionIndex + 1} / 10` : 'Starting…'}</p>
           <div className="equation" data-invalid={!!feedback}>
-            <span className="question" data-testid="question" aria-label={`${round.left} times ${round.right}`}>{round.left} <span className="operator">×</span> {round.right}</span><span className="operator equals" aria-hidden="true">=</span>
-            <input ref={input} aria-label="Answer" aria-invalid={!!feedback} aria-describedby="answer-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" type="text" value={answer} disabled={savingFailed} onChange={event => { answerRef.current = event.target.value; setAnswer(event.target.value); armed.current = true; setFeedback('') }}/>
+            <span className="question" data-testid={round.phase === 'playing' ? 'question' : undefined} aria-label={round.phase === 'playing' ? `${round.left} times ${round.right}` : undefined}>{round.phase === 'playing' ? <>{round.left} <span className="operator">×</span> {round.right}</> : '…'}</span><span className="operator equals" aria-hidden="true">=</span>
+            <input ref={input} aria-label={preparing ? 'Starting round' : 'Answer'} aria-invalid={!!feedback} aria-describedby="answer-feedback" autoComplete="off" spellCheck={false} inputMode="numeric" enterKeyHint="done" type="text" value={answer} aria-disabled={preparing} disabled={savingFailed} onBeforeInput={event => { if (claiming.current) event.preventDefault() }} onChange={event => { if (claiming.current || !owner.current) return; answerRef.current = event.target.value; setAnswer(event.target.value); armed.current = true; setFeedback('') }}/>
           </div>
           <p id="answer-feedback" className="answer-feedback" role="status">{feedback || ' '}</p>
+          <div className="practice-actions">
+            <button className="submit-answer" type="button" disabled={!available || savingFailed} onPointerDown={event => { event.preventDefault(); input.current?.focus() }} onClick={submit}>Submit</button>
+            <button className="cancel-round" type="button" disabled={!available || savingFailed} onClick={cancel}>Cancel</button>
+          </div>
           <p className="shortcut"><kbd>enter</kbd> submit</p>
         </section>}
-        {round.phase === 'finished' && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+        {round.phase === 'finished' && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / 10</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={start}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
       </main>
       {multiplication && !practice && <main><StatsPage attempts={attempts}/></main>}
       <DivisionPage visible={!multiplication}/>

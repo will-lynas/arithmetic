@@ -35,27 +35,57 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
   })
   const [hovered, setHovered] = useState<ActiveCell | null>(null)
   const [keyboardFocused, setKeyboardFocused] = useState<ActiveCell | null>(null)
+  const [touched, setTouched] = useState<ActiveCell | null>(null)
   const keyboard = useRef(true)
   const buttons = useRef<Record<Metric, (HTMLButtonElement | null)[]>>({ accuracy: [], speed: [] })
-  const active = hovered ?? keyboardFocused
+  const active = hovered ?? keyboardFocused ?? touched
 
   useEffect(() => {
+    let gesture: { id: number; x: number; y: number; cell: ActiveCell | null; moved: boolean } | null = null
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.metaKey || event.altKey || event.isComposing || ['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return
       keyboard.current = true
+      setTouched(null)
       for (const metric of ['accuracy', 'speed'] as const) {
         const index = buttons.current[metric].indexOf(document.activeElement as HTMLButtonElement)
         if (index !== -1) { setHovered(null); setKeyboardFocused({ metric, index }) }
       }
     }
-    const onPointer = () => { keyboard.current = false; setKeyboardFocused(null) }
-    const onBlur = () => { setHovered(null); setKeyboardFocused(null) }
+    const onPointer = (event: PointerEvent) => {
+      keyboard.current = false
+      setKeyboardFocused(null)
+      if (event.pointerType !== 'touch') { setTouched(null); gesture = null; return }
+      setHovered(null)
+      if (!event.isPrimary) { gesture = null; return }
+      let cell: ActiveCell | null = null
+      for (const metric of ['accuracy', 'speed'] as const) {
+        const index = buttons.current[metric].findIndex(button => button?.contains(event.target as Node))
+        if (index !== -1) cell = { metric, index }
+      }
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, cell, moved: false }
+    }
+    const onMove = (event: PointerEvent) => {
+      if (gesture?.id === event.pointerId && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 8) gesture.moved = true
+    }
+    const onUp = (event: PointerEvent) => {
+      if (gesture?.id !== event.pointerId) return
+      if (!gesture.moved) setTouched(gesture.cell)
+      gesture = null
+    }
+    const onCancel = () => { gesture = null }
+    const onBlur = () => { gesture = null; setHovered(null); setKeyboardFocused(null); setTouched(null) }
     document.addEventListener('keydown', onKey, true)
     document.addEventListener('pointerdown', onPointer, true)
+    document.addEventListener('pointermove', onMove, true)
+    document.addEventListener('pointerup', onUp, true)
+    document.addEventListener('pointercancel', onCancel, true)
     window.addEventListener('blur', onBlur)
     return () => {
       document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointer, true)
+      document.removeEventListener('pointermove', onMove, true)
+      document.removeEventListener('pointerup', onUp, true)
+      document.removeEventListener('pointercancel', onCancel, true)
       window.removeEventListener('blur', onBlur)
     }
   }, [])
@@ -87,7 +117,7 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
     const title = speed ? 'Average solve time' : 'First-try accuracy'
     const detail = active?.metric === metric ? pairs[active.index] : null
     return <div className="stats-map" key={metric}
-      onPointerEnter={() => setKeyboardFocused(previous => previous?.metric === metric ? previous : null)}>
+      onPointerEnter={event => { if (event.pointerType !== 'touch') { setTouched(null); setKeyboardFocused(previous => previous?.metric === metric ? previous : null) } }}>
       <div className="stats-map-heading">
         <h2 title={speed ? solveDefinition : undefined}>{title}</h2>
         {speed ? <div className="stats-legend stats-speed-legend" aria-label="Solve time color scale"
@@ -95,7 +125,7 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
           <span>Fastest {endpoint(scale.min)}</span>
           <span className="stats-legend-scale" data-equal={equal} data-empty={scale.min === null} aria-hidden="true" />
           <span>Slowest {endpoint(scale.max)}</span>
-          <span className="stats-legend-empty" aria-hidden="true" /><span>Unsolved</span>
+          <span className="stats-legend-key"><span className="stats-legend-empty" aria-hidden="true" /><span>Unsolved</span></span>
         </div> : <div className="stats-legend" aria-label="Accuracy color scale">
           <span>0%</span><span className="stats-legend-scale" aria-hidden="true" /><span>100%</span>
           <span className="stats-legend-empty" aria-hidden="true" /><span>Unattempted</span>
@@ -126,15 +156,16 @@ export function StatsPage({ attempts }: { attempts: readonly AttemptRecord[] }) 
                 ref={element => { buttons.current[metric][index] = element }}
                 onFocus={() => {
                   setSelected(previous => ({ ...previous, [metric]: index }))
-                  if (keyboard.current) { setHovered(null); setKeyboardFocused({ metric, index }) }
+                  if (keyboard.current) { setHovered(null); setTouched(null); setKeyboardFocused({ metric, index }) }
                 }}
                 onBlur={() => setKeyboardFocused(null)}
-                onPointerEnter={() => {
+                onPointerEnter={event => {
+                  if (event.pointerType === 'touch') return
+                  setTouched(null)
                   setHovered({ metric, index })
                   setKeyboardFocused(previous => previous?.metric === metric ? previous : null)
-                }} onPointerLeave={() => setHovered(null)}
+                }} onPointerLeave={event => { if (event.pointerType !== 'touch') setHovered(null) }}
                 onPointerCancel={() => setHovered(null)}
-                onPointerUp={event => { if (event.pointerType === 'touch') setHovered(null) }}
                 onKeyDown={event => navigate(event, metric, index)}>
                 {speed ? speedDuration(pair.averageSolveMs) : percent(accuracy)}
               </button>
