@@ -1,0 +1,10 @@
+.app.synthetic-dialog { min-height: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 28px; border: 1px solid var(--line); border-radius: 8px; margin: auto; font-size: 14px; line-height: 1.6; }
+.synthetic-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.synthetic-dialog h2 { margin-bottom: 18px; }
+.synthetic-dialog p + p { margin-top: 16px; }
+.synthetic-dialog .synthetic-note { color: var(--muted); font-size: 12px; }
+.synthetic-dialog [role="alert"] { color: var(--invalid); }
+.synthetic-dialog [role="status"] { color: var(--accent); }
+.synthetic-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.synthetic-actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--text); padding: 8px 12px; font-size: 13px; }
+.synthetic-actions button:hover { color: var(--accent); }
