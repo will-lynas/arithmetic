@@ -26,14 +26,16 @@ async function verifyLedger(page:Page,history:AttemptRecord[]) {
   for(const d of debugDistributions(snapshot,history)) {
     const plot=page.getByRole('figure',{name:`${d.title} histogram`,exact:true})
     await expect(plot.locator('.recharts-surface')).toBeVisible()
-    await expect(plot.getByText(`${d.known} known / 144 · ${d.missing} missing`,{exact:true})).toBeVisible()
-    await plot.getByText('Bin counts',{exact:true}).click()
+    if(d.missing)await expect(plot.getByText(`${d.missing} missing`,{exact:true})).toBeVisible()
+    else await expect(plot.getByText(/missing/)).toHaveCount(0)
     expect(await plot.locator('tbody tr').evaluateAll(rows=>rows.map(r=>({lower:Number(r.getAttribute('data-lower')),upper:Number(r.getAttribute('data-upper')),count:Number(r.getAttribute('data-count'))})))).toEqual(d.bins)
+    const geometry=await plot.locator('[data-bin-index]').evaluateAll(nodes=>nodes.map(n=>({x:Number(n.getAttribute('x')),width:Number(n.getAttribute('width')),count:Number(n.getAttribute('data-count'))})))
+    expect(geometry.map(b=>b.count)).toEqual(d.bins.map(b=>b.count))
+    for(let i=1;i<geometry.length;i++)expect(Math.abs(geometry[i]!.x-geometry[i-1]!.x-geometry[i-1]!.width)).toBeLessThan(0.2)
     expect(d.bins.reduce((sum,b)=>sum+b.count,0)+d.missing).toBe(144)
-    await plot.getByText('Bin counts',{exact:true}).click()
   }
 }
-for(const theme of ['dark','light'])for(const width of [1440,375])test(`real hidden load refreshes Debug, reloads and exactly restores original ${theme} ${width}`,async({page},info)=>{
+for(const theme of ['dark','light'])for(const width of [1440,320])test(`real hidden load refreshes Debug, reloads and exactly restores original ${theme} ${width}`,async({page},info)=>{
   await page.setViewportSize({width,height:1000})
   await page.clock.setFixedTime(new Date(now))
   await page.goto('/multiplication/debug?demo=1')
@@ -59,9 +61,10 @@ for(const theme of ['dark','light'])for(const width of [1440,375])test(`real hid
   await expect(page.locator('.app').first()).toHaveClass(new RegExp(theme))
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
   await page.screenshot({path:info.outputPath(`seeded-debug-${theme}-${width}.png`),fullPage:true})
+  await page.locator('.debug-plots').screenshot({path:info.outputPath(`seeded-debug-${theme}-${width}-charts.png`)})
   await info.attach('seeded-ledger-and-diagnostics',{body:JSON.stringify({history,snapshot:samplerDiagnostics(history,now),distributions:debugDistributions(samplerDiagnostics(history,now),history)},null,2),contentType:'application/json'})
   await page.reload();await verifyLedger(page,history);expect(await bytes(page)).toEqual(loaded)
-  await page.getByRole('button',{name:'Refresh snapshot',exact:true}).click();await verifyLedger(page,history)
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();await verifyLedger(page,history)
   await page.getByRole('link',{name:'Stats',exact:true}).click()
   const counts=page.getByRole('table',{name:'Completions by ordered multiplication pair',exact:true}).locator('[data-pair]')
   expect(await counts.evaluateAll(cells=>cells.reduce((sum,c)=>sum+Number(c.textContent),0))).toBe(aggregateStatistics(history).pairs.reduce((sum,p)=>sum+p.solved,0))
