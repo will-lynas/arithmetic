@@ -12,6 +12,8 @@ const BASELINE_WINDOW = 64
 const ERROR_BOOST = 12
 const SPEED_BOOST = 2
 const DRAW_FLOOR = 0.05 // Tiny/noisy/stale signals must not own half the draws.
+const COVERAGE_TARGET = 3
+const COVERAGE_STEP = 16 // One missing completion outweighs max error (12) + speed (2).
 const DAY = 86_400_000
 const pair = (left: number, right: number) => `${left}x${right}`
 const median = (values: number[]) => {
@@ -23,7 +25,7 @@ const logTime = (ms: number) => Math.log(Math.min(30_000, Math.max(250, ms)))
 
 function presentations(attempts: readonly AttemptRecord[], roundId?: string) {
   const observations = groupQuestions(attempts.filter(isAttempt)).map(submissions => ({
-    ...submissions[0], failed:submissions.some(a => !a.correct),
+    ...submissions[0], failed:submissions.some(a => !a.correct), completed:submissions.some(a => a.correct),
   }))
   const roundTimes = new Map<string, number>()
   for (const a of observations) roundTimes.set(a.roundId, Math.max(roundTimes.get(a.roundId) ?? -Infinity, Date.parse(a.submittedAt)))
@@ -38,7 +40,15 @@ function presentations(attempts: readonly AttemptRecord[], roundId?: string) {
 export function questionWeights(attempts: readonly AttemptRecord[], now = Date.now(), roundId?: string) {
   // Never repair/rewrite raw data. Reuse the ledger validator and presentation
   // grouping (including conservative wrong-before-correct elapsed-time ties).
-  const observations = presentations(attempts, roundId).slice(-HISTORY)
+  const all = presentations(attempts, roundId)
+  // Lifetime completion is independent of the bounded recent-difficulty window.
+  // Saturate derived counts; never persist counters or rewrite ledger records.
+  const completed = new Map<string, number>()
+  for (const q of all) if (q.completed) {
+    const key = pair(q.left,q.right)
+    completed.set(key, Math.min(COVERAGE_TARGET, (completed.get(key) ?? 0) + 1))
+  }
+  const observations = all.slice(-HISTORY)
   const clean = observations.filter(a => !a.failed).slice(-BASELINE_WINDOW)
   const baseline = clean.length >= CLEAN_GATE ? median(clean.map(a => logTime(a.elapsedMs))) : null
   return Array.from({length:144}, (_,i) => {
@@ -57,7 +67,9 @@ export function questionWeights(attempts: readonly AttemptRecord[], now = Date.n
     // Typed-submit latency is NOT response onset, nor a failure/mastery label.
     const slow = baseline !== null && times.length
       ? Math.min(1, Math.max(0, (median(times) - baseline) / Math.log(4))) * times.length / (times.length + 2) : 0
-    return {left, right, weight:ERROR_BOOST * error + SPEED_BOOST * slow}
+    const coverageBoost = COVERAGE_STEP * (COVERAGE_TARGET - (completed.get(pair(left,right)) ?? 0))
+    const difficultyWeight = ERROR_BOOST * error + SPEED_BOOST * slow
+    return {left, right, weight:coverageBoost + difficultyWeight, coverageBoost, difficultyWeight}
   })
 }
 
@@ -72,7 +84,8 @@ export function sampleQuestion(attempts: readonly AttemptRecord[], random: () =>
   // At most ten slots and four cooled pairs: the 144-fact pool cannot exhaust.
   const choices = questionWeights(attempts, now, roundId).filter(q =>
     !cooling.has(pair(q.left,q.right)) && (counts.get(pair(q.left,q.right)) ?? 0) < 2)
-  if (!choices.some(q => q.weight > 0) || random() < 0.5) return choices[Math.floor(random() * choices.length)]!
+  // Equal scores are uniform in either component; retain the single-draw path.
+  if (choices.every(q => q.weight === choices[0]!.weight) || random() < 0.5) return choices[Math.floor(random() * choices.length)]!
   const total = choices.reduce((sum, q) => sum + DRAW_FLOOR + q.weight, 0)
   let target = random() * total
   return choices.find(q => (target -= DRAW_FLOOR + q.weight) < 0) ?? choices.at(-1)!
