@@ -13,6 +13,20 @@ const render = (records = attempts) => renderToStaticMarkup(createElement(StatsP
 const table = (html: string, name: string) => html.match(new RegExp(`<table[^>]*aria-label="${name}"[^>]*>([\\s\\S]*?)</table>`))?.[1] ?? ''
 
 describe('StatsPage', () => {
+  it('shows unique completed ordered squares out of 144, including corrections but not wrong-only attempts', () => {
+    expect(render([])).toContain('Completed: 0 / 144')
+    expect(render([attempts[0]])).toContain('Completed: 0 / 144')
+    expect(render([
+      ...attempts,
+      { ...attempts[1], id: 'retry', elapsedMs: 6000 },
+      { ...attempts[2], id: 'reverse', left: 6, right: 9 },
+      { ...attempts[0], id: 'wrong-only', left: 2, right: 3 },
+    ])).toContain('Completed: 2 / 144')
+    const full = Array.from({ length: 144 }, (_, index) => ({
+      ...attempts[2], id: `square-${index}`, left: Math.floor(index / 12) + 1, right: index % 12 + 1,
+    }))
+    expect(render(full)).toContain('Completed: 144 / 144')
+  })
   it('preserves 144 accessible accuracy cells, axes, denominators and initially empty details', () => {
     const html = render()
     const accuracy = table(html, 'First-try accuracy by ordered multiplication pair')

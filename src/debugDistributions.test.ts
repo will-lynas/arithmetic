@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { debugDistributions, histogram, countTicks } from './debugDistributions'
-import { samplerDiagnostics } from './scheduler'
+import { COVERAGE_BOOSTS, samplerDiagnostics } from './scheduler'
 
 test('count ticks stay integer and use nice intervals for sparse and full populations',()=>{
   expect(countTicks(0)).toEqual([0,1])
@@ -12,9 +12,10 @@ test('count ticks stay integer and use nice intervals for sparse and full popula
 
 test('coverage uses every supported discrete value, including empty categories',()=>{
   const snapshot=samplerDiagnostics([],0)
-  snapshot.rows.forEach((q,i)=>{q.coverageBoost=[0,16,32,48][i%4]!})
+  const categories=[...COVERAGE_BOOSTS].sort((a,b)=>a-b)
+  snapshot.rows.forEach((q,i)=>{q.coverageBoost=categories[i%4]!})
   const coverage=debugDistributions(snapshot,[])[0]!
-  expect(coverage.bins.map(b=>[b.lower,b.upper,b.count])).toEqual([[0,0,36],[16,16,36],[32,32,36],[48,48,36]])
+  expect(coverage.bins.map(b=>[b.lower,b.upper,b.count])).toEqual(categories.map(value=>[value,value,36]))
   const empty=debugDistributions(samplerDiagnostics([],0),[])[0]!
   expect(empty.bins.map(b=>b.count)).toEqual([0,0,0,144])
 })

@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { ActiveClock, parseAnswer } from './game'
 import { acquireRound } from './ownership'
 import { appendDivisionEvent, divisionQuestion, DIVISION_ROUND_LENGTH, loadDivisionEvents, type DivisionAttempt, type DivisionEvent, type DivisionStart } from './division'
+import { RoundCalculations } from './RoundCalculations'
 
 type Round = {start:DivisionStart; index:number; finished:boolean}
 export function DivisionPage({visible}:{visible:boolean}) {
@@ -156,6 +157,10 @@ export function DivisionPage({visible}:{visible:boolean}) {
   const plannedLength=round?.start.questions.length ?? DIVISION_ROUND_LENGTH
   const firstTry=Array.from({length:plannedLength},(_,i)=>roundAttempts.filter(e=>e.questionIndex===i).sort((a,b)=>a.sequence-b.sequence)[0]?.correct).filter(Boolean).length
   const seconds=Array.from({length:plannedLength},(_,i)=>Math.max(0,...roundAttempts.filter(e=>e.questionIndex===i).map(e=>e.elapsedMs))).reduce((a,b)=>a+b,0)/1000
+  const resultRows=round?.finished ? round.start.questions.map(q=>({
+    calculation:`${q.dividend} ÷ ${q.divisor} = ${q.quotient} r ${q.remainder}`,
+    completions:new Set(attempts.filter(e=>e.correct && e.dividend===q.dividend && e.divisor===q.divisor && e.quotient===q.quotient && e.remainder===q.remainder).map(e=>JSON.stringify([e.roundId,e.questionIndex]))).size,
+  })) : []
   return <main aria-label="Division" hidden={!visible}>
     {warnings.map(w=><p className="storage-warning" role="alert" key={w}>{w}</p>)}
     {error && <div className="storage-warning" role="alert">{error}{failed && <button className="retry-save" onClick={()=>{if(pending.current)commit(pending.current)}}>Retry saving</button>}</div>}
@@ -173,6 +178,6 @@ export function DivisionPage({visible}:{visible:boolean}) {
       </div>
       <p className="shortcut"><kbd>enter</kbd> submit <span className="key-gap"><kbd>tab</kbd> / <kbd>space</kbd> switch</span> <span className="key-gap"><kbd>esc</kbd> cancel</span></p>
     </section>}
-    {round?.finished && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / {plannedLength}</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p></section>}
+    {round?.finished && !preparing && <section className="stage result" aria-label="Round result"><h2>Round complete</h2><div className="result-metrics"><div><strong>{seconds.toFixed(2)}<span>s</span></strong><p>Active time</p></div><div><strong>{firstTry}<span> / {plannedLength}</span></strong><p>First try</p></div></div><button ref={action} className="primary" disabled={!available} onClick={()=>void start()}>New round</button><p className="shortcut"><kbd>enter</kbd> new round</p><RoundCalculations rows={resultRows}/></section>}
   </main>
 }

@@ -19,7 +19,9 @@ async function verifyLedger(page:Page,history:AttemptRecord[]) {
   const snapshot=samplerDiagnostics(history,now)
   const rows=page.getByRole('table',{name:'Ranked next-draw probabilities'}).locator('tbody tr')
   await expect(rows).toHaveCount(144)
-  expect(await rows.evaluateAll(rows=>rows.map(r=>({pair:r.getAttribute('data-pair'),p:Number(r.getAttribute('data-probability')),eligible:r.getAttribute('data-eligible')==='true',completed:Number(r.children[5].textContent)})))).toEqual(snapshot.rows.map(r=>({pair:`${r.left}x${r.right}`,p:r.probability,eligible:r.eligible,completed:r.completed})))
+  // Node and browser Math.exp can differ in the last bit; retain exact row,
+  // eligibility and count checks, comparing probabilities to 14 decimal places.
+  expect(await rows.evaluateAll(rows=>rows.map(r=>({pair:r.getAttribute('data-pair'),p:Number(r.getAttribute('data-probability')),eligible:r.getAttribute('data-eligible')==='true',completed:Number(r.children[3].textContent)})))).toEqual(snapshot.rows.map(r=>({pair:`${r.left}x${r.right}`,p:expect.closeTo(r.probability,14),eligible:r.eligible,completed:r.completed})))
   expect(snapshot.rows.reduce((sum,r)=>sum+r.probability,0)).toBeCloseTo(1,12)
   const statistics=aggregateStatistics(history)
   expect(snapshot.rows.reduce((sum,r)=>sum+r.completed,0)).toBe(statistics.pairs.reduce((sum,p)=>sum+p.solved,0))

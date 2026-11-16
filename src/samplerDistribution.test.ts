@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { samplerDiagnostics } from './scheduler'
+import { COVERAGE_BOOSTS, samplerDiagnostics } from './scheduler'
 import type { AttemptRecord } from './types'
 
 const now=Date.parse('2026-06-01T00:00:00Z')
@@ -40,7 +40,7 @@ test('raw factors keep corrected failures, uncapped completion and bounded slow 
   const correction={...wrong,id:id(41),correct:true,answer:54,elapsedMs:5000}
   const slow={...row(42,8,7),elapsedMs:8000}
   const data=samplerDiagnostics([...base,wrong,correction,slow,row(43,3,4),row(44,4,5)],now)
-  expect(data.rows.find(q=>q.left===9&&q.right===6)).toMatchObject({completed:1,coverageBoost:32,speedBoost:0})
+  expect(data.rows.find(q=>q.left===9&&q.right===6)).toMatchObject({completed:1,coverageBoost:COVERAGE_BOOSTS[1],speedBoost:0})
   expect(data.rows.find(q=>q.left===9&&q.right===6)!.errorBoost).toBeGreaterThan(0)
   expect(data.rows.find(q=>q.left===8&&q.right===7)!.speedBoost).toBeGreaterThan(0)
 })

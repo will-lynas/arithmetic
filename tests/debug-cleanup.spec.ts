@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { samplerHistory, syntheticNow } from './fixtures/samplerHistory'
+import { COVERAGE_BOOSTS } from '../src/scheduler'
 
 for(const theme of ['dark','light'])for(const width of [1440,320])test(`compact diagnostics ${theme} ${width}`,async({page},info)=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.stack??e.message))
@@ -43,7 +44,8 @@ for(const theme of ['dark','light'])for(const width of [1440,320])test(`compact 
   }
   expect(new Set(colors).size).toBe(7)
   const coverage=page.locator('[data-metric="coverageBoost"]')
-  expect(await coverage.locator('tbody tr td:first-child').allTextContents()).toEqual(['0','16','32','48'])
+  expect(await coverage.locator('tbody tr td:first-child').allTextContents()).toEqual([...COVERAGE_BOOSTS].sort((a,b)=>a-b).map(String))
+  await expect(page.getByRole('columnheader',{name:/Uniform|Weighted ½/})).toHaveCount(0)
   if(width===1440) {
     const boxes=await page.locator('.debug-plot').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top))
     expect(boxes.filter(y=>y===boxes[0]).length).toBe(3)

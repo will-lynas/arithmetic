@@ -131,6 +131,7 @@ test('real wrong-answer correction counts once and survives cancellation, reload
   await input.press('Enter')
   await page.getByRole('link', { name: 'Stats', exact: true }).click()
   await expect(cell(page, pair)).toHaveText('0')
+  await expect(page.getByText('Completed: 0 / 144', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Practice', exact: true }).click()
   await input.fill(String(left * right))
   await input.press('Enter')
@@ -138,6 +139,7 @@ test('real wrong-answer correction counts once and survives cancellation, reload
   await input.press('Escape')
   await page.getByRole('link', { name: 'Stats', exact: true }).click()
   await expect(cell(page, pair)).toHaveText('1')
+  await expect(page.getByText('Completed: 1 / 144', { exact: true })).toBeVisible()
   await page.evaluate(() => {
     localStorage.setItem('arithmetic:attempt:v99:future', '{ "version": 99, "unknown": "preserve" }')
     localStorage.setItem('arithmetic:attempt:v1:unreadable', '{not json')
@@ -146,5 +148,6 @@ test('real wrong-answer correction counts once and survives cancellation, reload
   await page.reload()
   await expect(cell(page, pair)).toHaveText('1')
   await expect(page.getByRole('alert')).toContainText('original data has been kept')
+  await expect(page.getByText('Completed: 1 / 144', { exact: true })).toBeVisible()
   expect(await snapshot(page)).toEqual(bytes)
 })

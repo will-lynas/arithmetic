@@ -3,7 +3,7 @@ import { isAttempt } from './storage'
 import type { AttemptRecord } from './types'
 
 // Evidence-informed, NOT the published ARTS selector: ARTS uses max priority.
-// Our 50/50 coverage/difficulty mix and every numeric tuning below are custom.
+// Our weighted random selector and every numeric tuning below are custom.
 // https://files.eric.ed.gov/fulltext/ED549436.pdf (methods pp. 2533–2534).
 const HISTORY = 256
 const FACT_HISTORY = 8
@@ -11,9 +11,11 @@ const CLEAN_GATE = 12
 const BASELINE_WINDOW = 64
 const ERROR_BOOST = 12
 const SPEED_BOOST = 2
-const DRAW_FLOOR = 0.05 // Tiny/noisy/stale signals must not own half the draws.
+const DRAW_FLOOR = 1 // Keep mature facts reachable without amplifying tiny signals.
 const COVERAGE_TARGET = 3
-const COVERAGE_STEP = 16 // One missing completion outweighs max error (12) + speed (2).
+const COVERAGE_DECAY = 64
+export const COVERAGE_BOOSTS = Array.from({length:COVERAGE_TARGET + 1}, (_,completed) =>
+  completed < COVERAGE_TARGET ? 12 * COVERAGE_DECAY ** (2 - completed) : 0)
 const DAY = 86_400_000
 const pair = (left: number, right: number) => `${left}x${right}`
 const median = (values: number[]) => {
@@ -69,12 +71,13 @@ export function questionWeights(attempts: readonly AttemptRecord[], now = Date.n
     const slow = baseline !== null && times.length
       ? Math.min(1, Math.max(0, (median(times) - baseline) / Math.log(4))) * times.length / (times.length + 2) : 0
     const count = completed.get(pair(left,right)) ?? 0
-    const coverageBoost = COVERAGE_STEP * (COVERAGE_TARGET - Math.min(COVERAGE_TARGET, count))
+    const coverageBoost = COVERAGE_BOOSTS[Math.min(COVERAGE_TARGET, count)]!
     const errorBoost = ERROR_BOOST * error, speedBoost = SPEED_BOOST * slow
     const difficultyWeight = errorBoost + speedBoost
     const weight = coverageBoost + difficultyWeight
     return {left, right, weight, coverageBoost, difficultyWeight, errorBoost, speedBoost,
       completed:count, floor:DRAW_FLOOR, total:DRAW_FLOOR + weight}
+
   })
 }
 
@@ -101,9 +104,7 @@ export function samplerDiagnostics(attempts: readonly AttemptRecord[], now = Dat
   const eligible = pool.filter(q => q.eligible)
   const totalWeight = eligible.reduce((sum,q) => sum + q.total, 0)
   const rows = pool.map(q => {
-    const uniformProbability = q.eligible ? 0.5 / eligible.length : 0
-    const weightedProbability = q.eligible ? 0.5 * q.total / totalWeight : 0
-    return {...q, uniformProbability, weightedProbability, probability:uniformProbability + weightedProbability}
+    return {...q, probability:q.eligible ? q.total / totalWeight : 0}
   }).sort((a,b) => b.probability - a.probability || a.left - b.left || a.right - b.right)
   const coverage = [0,1,2,3].map(completed => {
     const cohort = rows.filter(q => Math.min(3,q.completed) === completed)
@@ -118,8 +119,7 @@ export function samplerDiagnostics(attempts: readonly AttemptRecord[], now = Dat
 
 export function sampleQuestion(attempts: readonly AttemptRecord[], random: () => number, now: number, roundId?: string) {
   const choices = questionPool(attempts, now, roundId).filter(q => q.eligible)
-  // Equal scores are uniform in either component; retain the single-draw path.
-  if (choices.every(q => q.weight === choices[0]!.weight) || random() < 0.5) return choices[Math.floor(random() * choices.length)]!
+
   const total = choices.reduce((sum, q) => sum + DRAW_FLOOR + q.weight, 0)
   let target = random() * total
   return choices.find(q => (target -= DRAW_FLOOR + q.weight) < 0) ?? choices.at(-1)!

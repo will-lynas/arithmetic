@@ -1,4 +1,4 @@
-import { samplerDiagnostics } from './scheduler'
+import { COVERAGE_BOOSTS, samplerDiagnostics } from './scheduler'
 import { aggregateStatistics } from './statistics'
 import type { AttemptRecord } from './types'
 
@@ -46,7 +46,7 @@ export function debugDistributions(snapshot: ReturnType<typeof samplerDiagnostic
   ]
   return fields.map(field=>{
     const distribution=field.key==='coverageBoost'
-      ? {bins:[0,16,32,48].map(value=>({lower:value,upper:value,count:field.values.filter(v=>v===value).length})),known:field.values.length,missing:0}
+      ? {bins:[...COVERAGE_BOOSTS].sort((a,b)=>a-b).map(value=>({lower:value,upper:value,count:field.values.filter(v=>v===value).length})),known:field.values.length,missing:0}
       : histogram(field.values,field.key==='accuracy'?100:undefined,field.key==='accuracy'?5:6)
     return {key:field.key,title:field.title,unit:field.unit,...distribution}
   })

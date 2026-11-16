@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 import { randomQuestion, restoreRound } from './game'
-import { questionWeights } from './scheduler'
+import { COVERAGE_BOOSTS, questionWeights } from './scheduler'
 import { groupQuestions } from './questions'
 import type { AttemptRecord } from './types'
 
@@ -32,9 +32,9 @@ function draws(history: AttemptRecord[], count = 4000) {
 test('once coverage is saturated recent incorrect retrievals outweigh slow clean answers while all facts retain random coverage', () => {
   const history = [...covered(), ...baseline(), observation(30, 9, 6, false), observation(31, 2, 12, true, 8000), observation(32, 3, 3), observation(33, 4, 4)]
   const counts = draws(history)
-  expect(counts.get('9x6')!).toBeGreaterThan(1000)
+  expect(counts.get('9x6')!).toBeGreaterThan(200)
   expect(counts.get('9x6')!).toBeGreaterThan(3 * counts.get('2x12')!)
-  expect(counts.get('2x12')!).toBeGreaterThan(counts.get('12x12')! * 3)
+  expect(counts.get('2x12')!).toBeGreaterThan(counts.get('12x12')!)
   expect(counts.get('12x12')!).toBeGreaterThan(0)
   expect(counts.size).toBeGreaterThan(135)
 },30000)
@@ -44,18 +44,19 @@ test('very old or independently recovered errors and negligible timing noise can
   const stale = {...observation(30,9,6,false),submittedAt:new Date(now - 180 * 86400000).toISOString()}
   expect(draws([...covered(),stale,...tail]).get('9x6')!).toBeLessThan(100)
   const recovered = [observation(30,9,6,false),...Array.from({length:5},(_,i) => observation(31+i,9,6)),...tail]
-  expect(draws([...covered(),...recovered]).get('9x6')!).toBeLessThan(250)
+  expect(draws([...covered(),...recovered]).get('9x6')!).toBeLessThan(80)
   expect(draws([...covered(),...baseline(),observation(30,9,6,true,1001),...tail]).get('9x6')!).toBeLessThan(100)
 },30000)
 
 const weight = (history: AttemptRecord[], left = 9, right = 6, at = now) =>
   questionWeights(history, at).find(q => q.left === left && q.right === right)!.difficultyWeight
 
-test('coverage boosts decline linearly from unseen to three lifetime completed presentations, then stop', () => {
+test('coverage drops nonlinearly after the first lifetime completion, then saturates at three', () => {
   for (const completed of [0,1,2,3,4,20]) {
     const history = Array.from({length:completed}, (_,i) => observation(i,9,6))
     const q = questionWeights(history,now).find(q => q.left === 9 && q.right === 6)!
-    expect(q).toMatchObject({difficultyWeight:0,coverageBoost:16 * (3 - Math.min(completed,3)),weight:16 * (3 - Math.min(completed,3))})
+    const boost = [49152,768,12,0][Math.min(completed,3)]!
+    expect(q).toMatchObject({difficultyWeight:0,coverageBoost:boost,weight:boost})
   }
 })
 
@@ -66,14 +67,14 @@ test('coverage counts eventual completion once per ordered presentation, never r
   const wrong = observation(30,9,6,false)
   const correct = {...wrong,id:uuid(900),answer:54,correct:true,elapsedMs:2000}
   const repeated = {...correct,id:uuid(901),elapsedMs:3000}
-  expect(coverageWeight([wrong])).toBe(48)
-  expect(coverageWeight([wrong,correct,repeated,correct])).toBe(32)
-  expect(coverageWeight([wrong,correct,repeated],6,9)).toBe(48)
+  expect(coverageWeight([wrong])).toBe(COVERAGE_BOOSTS[0])
+  expect(coverageWeight([wrong,correct,repeated,correct])).toBe(COVERAGE_BOOSTS[1])
+  expect(coverageWeight([wrong,correct,repeated],6,9)).toBe(COVERAGE_BOOSTS[0])
   const next = {...correct,id:uuid(902),questionIndex:1}
   const otherRound = {...correct,id:uuid(903),roundId:uuid(5000)}
   const divergent = {...correct,id:uuid(904),left:6,right:9}
   expect(coverageWeight([wrong,correct,repeated,next,otherRound,divergent])).toBe(0)
-  expect(coverageWeight([correct,divergent],6,9)).toBe(32)
+  expect(coverageWeight([correct,divergent],6,9)).toBe(COVERAGE_BOOSTS[1])
 })
 
 test('coverage uses immutable full validated history even beyond the recent 256-presentation window', () => {
@@ -83,23 +84,22 @@ test('coverage uses immutable full validated history even beyond the recent 256-
   const history = [...old,...tail,invalid]
   const bytes = JSON.stringify(history)
   expect(coverageWeight(history)).toBe(0)
-  expect(coverageWeight(history,6,9)).toBe(48)
+  expect(coverageWeight(history,6,9)).toBe(COVERAGE_BOOSTS[0])
   expect(weight(history)).toBe(0)
   expect(JSON.stringify(history)).toBe(bytes)
 })
 
-test('coverage sampling uses the linear weights with deterministic injected randomness', () => {
+test('every draw uses one weighted roulette, never a uniform branch, while all eligible facts stay reachable', () => {
   const history = [...Array.from({length:3},(_,i) => observation(i,1,1)),observation(30,2,2),observation(31,3,3)]
-  const weighted = vi.fn().mockReturnValueOnce(0.75).mockReturnValueOnce(0.005)
-  expect(randomQuestion(weighted,history,undefined,now)).toEqual({left:1,right:2})
-  expect(weighted).toHaveBeenCalledTimes(2)
-  const difficult = [...history,observation(32,9,6,false),observation(33,4,4),observation(34,5,5)]
-  const random = vi.fn().mockReturnValueOnce(0.25).mockReturnValueOnce(0.005)
-  expect(randomQuestion(random,difficult,undefined,now)).toEqual({left:1,right:1})
-  expect(random).toHaveBeenCalledTimes(2)
+  const random = vi.fn(() => 0.005)
+  // Uniform selection would choose the mature 1x1; weighted selection skips it.
+  expect(randomQuestion(random,history,undefined,now)).toEqual({left:1,right:2})
+  expect(random).toHaveBeenCalledTimes(1)
+  expect(randomQuestion(() => 0,history,undefined,now)).toEqual({left:1,right:1})
+  expect(randomQuestion(() => 1-Number.EPSILON,history,undefined,now)).toEqual({left:12,right:12})
 })
 
-test('coverage beats even maximum error plus speed until three completions, then error beats speed', () => {
+test('early coverage outweighs difficulty; the final coverage step remains comparable to an error', () => {
   const history = [...covered(),...baseline(),observation(30,9,6,false),observation(31,8,7,true,8000)]
   const hard = questionWeights(history,now).find(q => q.left===9 && q.right===6)!
   const slow = questionWeights(history,now).find(q => q.left===8 && q.right===7)!
@@ -109,9 +109,9 @@ test('coverage beats even maximum error plus speed until three completions, then
   for (const completed of [0,1,2]) {
     const competing = [...history.filter(q => q.left!==12 || q.right!==12),...Array.from({length:completed},(_,i) => observation(50+i,12,12))]
     const undercovered = questionWeights(competing,now).find(q => q.left===12 && q.right===12)!
-    expect(undercovered.weight).toBe(16*(3-completed))
-    expect(undercovered.weight).toBeGreaterThan(14)
-    expect(undercovered.weight).toBeGreaterThan(hard.weight)
+    expect(undercovered.weight).toBe(COVERAGE_BOOSTS[completed])
+    if (completed < 2) expect(undercovered.weight).toBeGreaterThan(14)
+    expect(undercovered.weight).toBeGreaterThanOrEqual(hard.weight)
   }
 })
 
@@ -126,9 +126,10 @@ test('seeded coverage sampling favours less-completed cohorts without retiring p
   expect(cohorts[0]!).toBeGreaterThan(cohorts[1]!)
   expect(cohorts[1]!).toBeGreaterThan(cohorts[2]!)
   expect(cohorts[2]!).toBeGreaterThan(cohorts[3]!)
-  expect(cohorts[0]! / cohorts[3]!).toBeGreaterThan(2.2)
-  expect(cohorts[0]! / cohorts[3]!).toBeLessThan(3.8)
-  expect(cohorts[3]!).toBeGreaterThan(500)
+  expect(cohorts[0]!).toBeGreaterThan(5800)
+  // Rare mature draws remain possible; do not require hundreds in 6,000 draws
+  // when the requested first-completion priority makes their mass tiny.
+  expect(randomQuestion(() => 1-Number.EPSILON,history,undefined,now)).toEqual({left:12,right:11})
 },30000)
 
 test('a presentation with retries is one failure and correction earns no clean credit', () => {
@@ -168,7 +169,7 @@ test('two intervening presentations cool both operand orders across round bounda
     expect(['9x6','6x9','3x4','4x3']).not.toContain(`${q.left}x${q.right}`)
   }
   const eligible = [...history,observation(32,2,2)]
-  expect(draws([...covered(),...eligible]).get('9x6')!).toBeGreaterThan(1000)
+  expect(draws([...covered(),...eligible]).get('9x6')!).toBeGreaterThan(200)
 },30000)
 
 test('the exact pair is capped at two presentations per round, not two submissions or a permanent retirement', () => {
@@ -215,11 +216,43 @@ test('restored next-question selection uses full history and keeps failed/cancel
     const older = [error,observation(31,2,2),observation(32,3,3)]
     const current = observation(40,4,4)
     const all = [...covered(),...older,current]
-    expect(restoreRound([current],new Set(),all,() => 0.75)).toMatchObject({phase:'playing',questionIndex:1,left:9,right:6})
+    expect(restoreRound([current],new Set(),all,() => 0.7)).toMatchObject({phase:'playing',questionIndex:1,left:9,right:6})
     expect(restoreRound([current],new Set([current.roundId]),all)).toEqual({phase:'ready'})
     expect(restoreRound([error],new Set(),all,() => 0.75)).toMatchObject({phase:'playing',questionIndex:0,left:9,right:6,elapsedMs:1000})
   } finally { clock.mockRestore() }
 })
+
+test('every eligible interval is positive, normalized and sampled at its actual weighted midpoint', () => {
+  const history: AttemptRecord[]=[]
+  for(let i=0;i<144;i++) for(let j=0;j<i%4;j++) history.push(observation(i*3+j,Math.floor(i/12)+1,i%12+1))
+  const observed=groupQuestions(history).map(rows=>rows[0]!)
+  const cooling=new Set(observed.slice(-2).flatMap(q=>[`${q.left}x${q.right}`,`${q.right}x${q.left}`]))
+  const pool=questionWeights(history,now).filter(q=>!cooling.has(`${q.left}x${q.right}`))
+  const total=pool.reduce((sum,q)=>sum+1+q.weight,0)
+  let cumulative=0, probability=0
+  for(const q of pool) {
+    const p=(1+q.weight)/total
+    expect(p).toBeGreaterThan(0)
+    const draw=(cumulative+(1+q.weight)/2)/total
+    expect(randomQuestion(()=>draw,history,undefined,now)).toEqual({left:q.left,right:q.right})
+    cumulative+=1+q.weight; probability+=p
+  }
+  expect(probability).toBeCloseTo(1,12)
+})
+
+test('the last unseen fact competes against aggregate covered mass, not only one covered fact',()=>{
+  const history=Array.from({length:143},(_,i)=>observation(i,Math.floor(i/12)+1,i%12+1))
+  const observed=groupQuestions(history).map(rows=>rows[0]!)
+  const cooling=new Set(observed.slice(-2).flatMap(q=>[`${q.left}x${q.right}`,`${q.right}x${q.left}`]))
+  const pool=questionWeights(history,now).filter(q=>!cooling.has(`${q.left}x${q.right}`))
+  const total=pool.reduce((sum,q)=>sum+1+q.weight,0)
+  const unseen=pool.find(q=>q.left===12&&q.right===12)!
+  const probability=(1+unseen.weight)/total
+  expect(probability).toBeGreaterThan(0.3)
+  expect(probability).toBeLessThan(0.4)
+  const observedProbability=(draws(history).get('12x12')??0)/4000
+  expect(observedProbability).toBeCloseTo(probability,1)
+},30000)
 
 test('seeded comparison improves distinct and three-completion coverage versus the previous error-first selector, not learning efficacy', () => {
   // Previous production policy, sharing the unchanged difficulty calculation.
