@@ -7,7 +7,7 @@ import { formatQuadratic, gradeFactors, quadraticRound, QUADRATIC_ROUND_LENGTH, 
 import './quadratics.css'
 
 const hintKey = 'arithmetic:quadratics-round:v1'
-const labels = ['First x coefficient', 'First constant', 'Second x coefficient', 'Second constant']
+const labels = ['First constant', 'Second constant']
 const eventBase = (roundId: string) => ({version:1 as const, id:crypto.randomUUID(), roundId, submittedAt:new Date().toISOString()})
 type Feedback = { kind: 'malformed'; fields: boolean[]; pulse: number } | { kind: 'wrong' } | null
 
@@ -99,8 +99,8 @@ export function QuadraticsPage({visible}: {visible: boolean}) {
       const text = value.trim().replace(/^−/, '-')
       return parseAnswer(/^\+\d+$/.test(text) ? text.slice(1) : text)
     })
-    const [a, m, d, n] = parsed
-    if (a === null || m === null || d === null || n === null) {
+    const [m, n] = parsed
+    if (m === null || n === null) {
       const fields = parsed.map(value => value === null)
       setFeedback({kind:'malformed', fields, pulse:++current.pulse})
       const input = inputs.current[fields.indexOf(true)]
@@ -108,7 +108,8 @@ export function QuadraticsPage({visible}: {visible: boolean}) {
       return
     }
     current.armed = false
-    const answer: Factors = [a, m, d, n]
+    // Keep the existing attempt format so saved rounds and Stats remain compatible.
+    const answer: Factors = [1, m, 1, n]
     const question = active.start.questions[active.index]
     commit({...eventBase(active.start.roundId), ...question, kind:'attempt', index:active.index, sequence:active.sequence, elapsedMs:clock.current.elapsed(), answer, correct:gradeFactors(question, answer)})
   }
@@ -189,22 +190,20 @@ export function QuadraticsPage({visible}: {visible: boolean}) {
         <span className="question" data-testid={question && !preparing ? 'quadratic-question' : undefined} data-b={question?.b} data-c={question?.c}>{question && !preparing ? formatQuadratic(question) : '…'}</span>
         <span className="operator" aria-hidden="true">=</span>
         <div className="quadratic-factors">
-          {[0, 2].map(offset => <div className="quadratic-factor" key={offset}>
+          {labels.map((label, index) => <div className="quadratic-factor" key={label}>
             <span className="operator" aria-hidden="true">(</span>
-            {[offset, offset + 1].map(index => <span className="quadratic-term" key={index}>
-              {index % 2 === 1 && <span className="operator" aria-hidden="true">+</span>}
-              <input ref={node => { inputs.current[index] = node }} type="text" aria-label={preparing ? `Starting: ${labels[index]}` : labels[index]} aria-describedby="quadratic-feedback" aria-invalid={feedback?.kind === 'wrong' || (feedback?.kind === 'malformed' && feedback.fields[index])} data-wrong={feedback?.kind === 'wrong'} data-malformed={feedback?.kind === 'malformed' && feedback.fields[index]} autoComplete="off" spellCheck={false} enterKeyHint="done" value={values[index]} aria-disabled={preparing} disabled={failed} onBeforeInput={e => { if (current.claiming) e.preventDefault() }} onChange={e => {
-                if (current.claiming || !current.release || current.pending) return
-                current.values = current.values.map((value, i) => i === index ? e.target.value : value)
-                setValues(current.values); setFeedback(null); current.armed = true
-              }}/>
-              {index % 2 === 0 && <span aria-hidden="true">x</span>}
-            </span>)}
+            <span aria-hidden="true">x</span>
+            <span className="operator quadratic-plus" aria-hidden="true">+</span>
+            <input ref={node => { inputs.current[index] = node }} type="text" aria-label={preparing ? `Starting: ${label}` : label} aria-describedby="quadratic-feedback" aria-invalid={feedback?.kind === 'wrong' || (feedback?.kind === 'malformed' && feedback.fields[index])} data-wrong={feedback?.kind === 'wrong'} data-malformed={feedback?.kind === 'malformed' && feedback.fields[index]} autoComplete="off" spellCheck={false} enterKeyHint="done" value={values[index]} aria-disabled={preparing} disabled={failed} onBeforeInput={e => { if (current.claiming) e.preventDefault() }} onChange={e => {
+              if (current.claiming || !current.release || current.pending) return
+              current.values = current.values.map((value, i) => i === index ? e.target.value : value)
+              setValues(current.values); setFeedback(null); current.armed = true
+            }}/>
             <span className="operator" aria-hidden="true">)</span>
           </div>)}
         </div>
       </div>
-      <p id="quadratic-feedback" className="answer-feedback" data-validation={feedback?.kind === 'malformed'} role="status">{feedback?.kind === 'malformed' ? 'Enter four whole numbers' : feedback?.kind === 'wrong' ? 'Incorrect — try again' : '\u00a0'}</p>
+      <p id="quadratic-feedback" className="answer-feedback" data-validation={feedback?.kind === 'malformed'} role="status">{feedback?.kind === 'malformed' ? 'Enter two whole numbers' : feedback?.kind === 'wrong' ? 'Incorrect — try again' : '\u00a0'}</p>
       <div className="practice-actions">
         <button type="button" className="submit-answer" disabled={preparing || failed} onPointerDown={e => e.preventDefault()} onClick={submit}>Submit</button>
         <button type="button" className="cancel-round" disabled={preparing || failed} onPointerDown={e => e.preventDefault()} onClick={cancel}>Cancel</button>

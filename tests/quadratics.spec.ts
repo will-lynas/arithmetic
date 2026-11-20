@@ -1,24 +1,28 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const prefix = 'arithmetic:quadratics:'
-const labels = ['First x coefficient', 'First constant', 'Second x coefficient', 'Second constant']
+const labels = ['First constant', 'Second constant']
 const fields = (page: Page) => labels.map(name => page.getByRole('textbox', {name, exact: true}))
 const records = (page: Page) => page.evaluate(prefix => Object.entries(localStorage).filter(([key]) => key.startsWith(prefix)).map(([, bytes]) => JSON.parse(bytes)), prefix)
 
-async function answer(page: Page, { swap = false, negate = false } = {}) {
+async function answer(page: Page, { swap = false } = {}) {
   const q = await page.getByTestId('quadratic-question').evaluate(el => ({b: Number(el.getAttribute('data-b')), c: Number(el.getAttribute('data-c'))}))
   const d = Math.sqrt(q.b ** 2 - 4 * q.c)
-  const n = negate ? -1 : 1
   const pair = [(q.b - d) / 2, (q.b + d) / 2]
   if (swap) pair.reverse()
-  const values = [n, n * pair[0], n, n * pair[1]]
-  for (const [i, field] of fields(page).entries()) await field.fill(String(values[i]))
+  for (const [i, field] of fields(page).entries()) await field.fill(String(pair[i]))
+  return pair
 }
 
 test('keyboard practice accepts signed reversed factors, then shows per-question Stats on reload', async ({page}) => {
   await page.goto('/quadratics')
   await expect(page.getByRole('link', {name:'Factorising quadratics'})).toHaveAttribute('aria-current', 'page')
+  // Pick x² − x first so the reversed answer exercises zero and a negative constant.
+  await page.evaluate(() => { Math.random = () => 0.56 })
   await page.getByRole('button', {name:'Start', exact:true}).click()
+  const practice = page.getByRole('region', {name:'Quadratics practice'})
+  await expect(practice.getByRole('textbox')).toHaveCount(2)
+  await expect(practice.locator('.quadratic-factors')).toHaveText(/^\(x\s*\+\s*\)\s*\(x\s*\+\s*\)$/)
   await expect(fields(page)[0]).toBeFocused()
   for (const field of fields(page)) await expect(field).toHaveValue('')
   await page.keyboard.press('Tab')
@@ -28,9 +32,10 @@ test('keyboard practice accepts signed reversed factors, then shows per-question
   await fields(page)[0].fill('1')
   await fields(page)[1].fill('1.5')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('status')).toHaveText('Enter four whole numbers')
+  await expect(page.getByRole('status')).toHaveText('Enter two whole numbers')
   await expect(fields(page)[1]).toBeFocused()
   await expect(fields(page)[0]).toHaveAttribute('data-malformed', 'false')
+  await expect(fields(page)[1]).toHaveAttribute('data-malformed', 'true')
   expect((await records(page)).filter(e => e.kind === 'attempt')).toHaveLength(0)
   for (const field of fields(page)) await field.fill('0')
   await page.keyboard.press('Enter')
@@ -39,14 +44,18 @@ test('keyboard practice accepts signed reversed factors, then shows per-question
   expect((await records(page)).filter(e => e.kind === 'attempt')).toHaveLength(1)
   const first = await page.getByTestId('quadratic-question').textContent()
   for (let i = 0; i < 5; i++) {
-    await answer(page, {swap:true, negate:true})
-    if (i === 0) await fields(page)[0].fill('−1')
+    const [m, n] = await answer(page, {swap:true})
+    if (i === 0) {
+      expect([m, n]).toEqual([0, -1])
+      await fields(page)[1].fill('−1')
+    }
     await page.keyboard.press('Enter')
     if (i < 4) {
       await expect(page.getByLabel('Question progress')).toHaveText(`${i + 2} / 5`)
       await expect(fields(page)[0]).toBeFocused()
-      await expect(fields(page)[0]).toHaveValue('')
+      for (const field of fields(page)) await expect(field).toHaveValue('')
     }
+    expect((await records(page)).find(e => e.kind === 'attempt' && e.index === i && e.correct)?.answer).toEqual([1, m, 1, n])
   }
   await expect(page.getByRole('region', {name:'Round result'})).toContainText('4 / 5')
   await page.getByRole('link', {name:'Stats', exact:true}).click()
@@ -67,6 +76,7 @@ test('mobile layout supports signed input, pause, reload and cancel without cros
     await expect(page.getByLabel('Quadratics summary')).toContainText('—')
     await page.getByRole('button', {name:'Switch to light theme'}).tap()
     await page.getByRole('link', {name:'Practice', exact:true}).tap()
+    await page.evaluate(() => { Math.random = () => 0.075 }) // (x + 1)(x + 2)
     await page.getByRole('button', {name:'Start', exact:true}).tap()
     await expect(fields(page)[0]).toBeFocused()
     const question = await page.getByTestId('quadratic-question').textContent()
@@ -77,6 +87,7 @@ test('mobile layout supports signed input, pause, reload and cancel without cros
       expect(box?.width).toBeGreaterThanOrEqual(44)
       expect(box?.height).toBeGreaterThanOrEqual(44)
     }
+    await expect(page.getByRole('region', {name:'Quadratics practice'}).getByRole('textbox')).toHaveCount(2)
     await answer(page)
     await fields(page)[0].fill('+1')
     await fields(page)[1].fill('999')

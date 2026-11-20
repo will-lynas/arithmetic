@@ -1,7 +1,7 @@
 .equation.quadratic-equation { flex-wrap: wrap; column-gap: .42em; row-gap: .35em; font-size: clamp(32px, 3.15vw, 52px); }
-.quadratic-factors, .quadratic-factor, .quadratic-term { display: inline-flex; align-items: baseline; }
+.quadratic-factors, .quadratic-factor { display: inline-flex; align-items: baseline; }
 .quadratic-factors { justify-content: center; flex-wrap: wrap; gap: .12em; }
-.quadratic-factor .quadratic-term:nth-child(3) { gap: .14em; margin-left: .14em; }
+.quadratic-plus { margin-inline: .14em; }
 .equation.quadratic-equation input { width: max(3ch, 44px); min-width: 0; padding: .04em 0 .10em; }
 .quadratic-equation input:focus { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .quadratics-stats { padding-top: 28px; font-variant-numeric: tabular-nums; }
